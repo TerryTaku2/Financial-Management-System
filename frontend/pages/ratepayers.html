@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ratepayers — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Ratepayer Registry</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+        <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importRatepayers(this)">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/ratepayers?format=csv','ratepayers.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/ratepayers?format=xlsx','ratepayers.xlsx')">⬇ Excel</button>
+        <button class="btn btn-secondary" title="Download import template" onclick="downloadExport('/api/templates/ratepayers?format=xlsx','template_ratepayers.xlsx')">📋 Template</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Ratepayer</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="filter-bar">
+          <input type="text" id="searchInput" placeholder="🔍  Search by name or account..." style="min-width:260px" oninput="debounceLoad()">
+          <select id="zoneFilter" onchange="loadRatepayers()">
+            <option value="">All Zones</option>
+            <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
+            <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
+            <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+          </select>
+          <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Account #</th><th>Name</th><th>Address</th><th>Ward</th><th>Zone</th>
+              <th>Property Type</th><th>Phone</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="rpTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Ratepayer Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Register Ratepayer</span>
+      <button class="modal-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <div class="form-group"><label>Full Name / Company</label><input id="f_name" placeholder="e.g. Tatenda Moyo"></div>
+    <div class="form-group"><label>Address</label><input id="f_address" placeholder="123 Samora Machel Ave"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Ward</label>
+        <select id="f_ward">
+          <option>Ward 1</option><option>Ward 2</option><option>Ward 3</option><option>Ward 5</option>
+          <option>Ward 7</option><option>Ward 10</option><option>Ward 17</option><option>Ward 22</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Zone</label>
+        <select id="f_zone">
+          <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
+          <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
+          <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Phone</label><input id="f_phone" placeholder="077XXXXXXX"></div>
+      <div class="form-group"><label>Email</label><input id="f_email" type="email" placeholder="name@email.com"></div>
+    </div>
+    <div class="form-group"><label>Property Type</label>
+      <select id="f_proptype"><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveRatepayer()">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Detail Modal -->
+<div class="modal-overlay" id="viewModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <span class="modal-title">Account Details</span>
+      <button class="modal-close" onclick="closeModal('viewModal')">×</button>
+    </div>
+    <div id="viewContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('ratepayers');
+let currentPage = 1, debounceTimer, editingId = null;
+
+// Apply URL context on load
+(function() {
+  const p = getUrlParams();
+  if (p.search) document.getElementById('searchInput').value = p.search;
+  if (p.zone)   document.getElementById('zoneFilter').value  = p.zone;
+})();
+
+function debounceLoad() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadRatepayers, 400); }
+
+async function loadRatepayers(page = 1) {
+  currentPage = page;
+  const search = document.getElementById('searchInput').value;
+  const zone   = document.getElementById('zoneFilter').value;
+  const skip   = (page - 1) * 20;
+  try {
+    let url = `/api/ratepayers?skip=${skip}&limit=20`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (zone)   url += `&zone=${encodeURIComponent(zone)}`;
+    const data = await apiFetch(url);
+    document.getElementById('countBadge').textContent = `${data.total} ratepayers`;
+    const tbody = document.getElementById('rpTable');
+    if (data.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">👤</div><p>No ratepayers found</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.items.map(r => `
+      <tr>
+        <td><code style="font-size:12px;color:var(--primary-light)">${r.account_number}</code></td>
+        <td style="font-weight:500">${r.full_name}</td>
+        <td style="color:var(--text2);font-size:12.5px">${r.address}</td>
+        <td>${r.ward}</td>
+        <td>${r.zone}</td>
+        <td><span class="badge badge-info">${r.property_type}</span></td>
+        <td style="color:var(--text2)">${r.phone || '—'}</td>
+        <td>${r.is_active ? '<span class="badge badge-paid">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-secondary" onclick="viewRatepayer(${r.id})">View</button>
+          <button class="btn btn-sm btn-secondary" onclick="openEditModal(${r.id},'${escHtml(r.full_name)}','${escHtml(r.address)}','${r.ward}','${r.zone}','${r.phone||''}','${r.email||''}','${r.property_type}')">Edit</button>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('invoices.html',{ratepayer_id:r.id})}">Invoices</a>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{account:r.account_number})}">Aging</a>
+          <button class="btn btn-sm btn-danger" onclick="deleteRatepayer(${r.id},'${escHtml(r.full_name)}')">Delete</button>
+        </td>
+      </tr>`).join('');
+    renderPagination('pagination', data.total, 20, page, 'loadRatepayers');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function escHtml(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+
+async function viewRatepayer(id) {
+  try {
+    const r = await apiFetch(`/api/ratepayers/${id}`);
+    document.getElementById('viewContent').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+        ${[['Account #',r.account_number],['Name',r.full_name],['Address',r.address],
+           ['Ward/Zone',`${r.ward} / ${r.zone}`],['Phone',r.phone||'—'],['Email',r.email||'—'],
+           ['Property Type',r.property_type],['Status',r.is_active?'Active':'Inactive']]
+          .map(([l,v])=>`<div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:3px">${l}</div><div style="font-weight:500">${v}</div></div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total Billed</div>
+          <div style="font-weight:700;color:var(--primary-light)">${fmtMoney(r.total_billed)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total Paid</div>
+          <div style="font-weight:700;color:var(--success)">${fmtMoney(r.total_paid)}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Balance</div>
+          <div style="font-weight:700;color:var(--danger)">${fmtMoney(r.balance)}</div>
+        </div>
+      </div>`;
+    // Cross-page action buttons
+    document.querySelector('#viewModal .modal-footer').innerHTML = `
+      <a class="btn btn-secondary" href="${pageUrl('invoices.html',{ratepayer_id:r.id})}">View Invoices</a>
+      <a class="btn btn-secondary" href="${pageUrl('payments.html',{ratepayer_id:r.id})}">View Payments</a>
+      <a class="btn btn-secondary" href="${pageUrl('aging.html',{account:r.account_number})}">Aging</a>
+      <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>`;
+    openModal('viewModal');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openAddModal() {
+  editingId = null;
+  document.getElementById('modalTitle').textContent = 'Register Ratepayer';
+  document.getElementById('saveBtn').textContent = 'Register';
+  ['f_name','f_address','f_phone','f_email'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_ward').value = 'Ward 1';
+  document.getElementById('f_zone').value = 'Avondale';
+  document.getElementById('f_proptype').value = 'residential';
+  openModal('addModal');
+}
+
+function openEditModal(id, name, address, ward, zone, phone, email, proptype) {
+  editingId = id;
+  document.getElementById('modalTitle').textContent = 'Edit Ratepayer';
+  document.getElementById('saveBtn').textContent = 'Save Changes';
+  document.getElementById('f_name').value    = name;
+  document.getElementById('f_address').value = address;
+  document.getElementById('f_ward').value    = ward;
+  document.getElementById('f_zone').value    = zone;
+  document.getElementById('f_phone').value   = phone;
+  document.getElementById('f_email').value   = email;
+  document.getElementById('f_proptype').value = proptype;
+  openModal('addModal');
+}
+
+async function saveRatepayer() {
+  const data = {
+    full_name: document.getElementById('f_name').value,
+    address:   document.getElementById('f_address').value,
+    ward:      document.getElementById('f_ward').value,
+    zone:      document.getElementById('f_zone').value,
+    phone:     document.getElementById('f_phone').value,
+    email:     document.getElementById('f_email').value,
+    property_type: document.getElementById('f_proptype').value,
+  };
+  if (!data.full_name || !data.address) { toast('Name and address are required', 'warning'); return; }
+  try {
+    if (editingId) {
+      await apiPut(`/api/ratepayers/${editingId}`, data);
+      toast('Ratepayer updated', 'success');
+    } else {
+      const res = await apiPost('/api/ratepayers', data);
+      toast(`Ratepayer registered: ${res.account_number}`, 'success');
+    }
+    closeModal('addModal');
+    loadRatepayers(currentPage);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteRatepayer(id, name) {
+  await confirmDelete(`Delete ratepayer "${name}"? This cannot be undone.\n\nNote: ratepayers with invoices cannot be deleted — deactivate them instead.`, async () => {
+    try {
+      await apiDelete(`/api/ratepayers/${id}`);
+      toast('Ratepayer deleted', 'success');
+      loadRatepayers(currentPage);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function importRatepayers(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/ratepayers', file);
+    let msg = res.message;
+    if (res.errors && res.errors.length) msg += `\n\nWarnings:\n${res.errors.join('\n')}`;
+    toast(res.message, 'success');
+    if (res.errors && res.errors.length) alert(msg);
+    loadRatepayers();
+  } catch(e) { toast(e.message, 'error'); }
+  input.value = '';
+}
+
+loadRatepayers();
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payments — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Payment Records</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=csv','payments.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=xlsx','payments.xlsx')">⬇ Excel</button>
+        <button class="btn btn-primary" onclick="openModal('addModal')">+ Record Payment</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="filter-bar">
+          <select id="reconFilter" onchange="loadPayments()">
+            <option value="">All Payments</option>
+            <option value="false">Unreconciled</option>
+            <option value="true">Reconciled</option>
+          </select>
+          <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Receipt #</th><th>Ratepayer</th><th>Amount</th>
+              <th>Method</th><th>Currency</th><th>Date</th>
+              <th>Reconciled</th><th>Anomaly</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="pmtTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Record Payment Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Record Payment</span>
+      <button class="modal-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <div class="form-group"><label>Ratepayer ID</label><input id="f_rpid" type="number" placeholder="Enter ratepayer ID"></div>
+    <div class="form-group"><label>Invoice ID (optional)</label><input id="f_invid" type="number" placeholder="Leave blank if no specific invoice"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Amount</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Currency</label>
+        <select id="f_currency"><option value="USD">USD</option><option value="ZIG">ZIG</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label>Payment Method</label>
+      <select id="f_method">
+        <option value="cash">Cash</option><option value="ecocash">EcoCash</option>
+        <option value="bank_transfer">Bank Transfer</option><option value="rtgs">RTGS</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="f_notes" rows="2" placeholder="Optional notes..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="recordPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('payments');
+let currentPage = 1;
+const user = getUser();
+const canDelete = ['admin','accountant'].includes(user?.role);
+
+(function() {
+  const p = getUrlParams();
+  if (p.ratepayer_id) {
+    window._filterRatepayerId = parseInt(p.ratepayer_id);
+    document.querySelector('.topbar-title').textContent = 'Payments — Ratepayer #' + p.ratepayer_id;
+  }
+})();
+
+async function loadPayments(page = 1) {
+  currentPage = page;
+  const recon = document.getElementById('reconFilter').value;
+  const skip  = (page-1)*30;
+  try {
+    let url = `/api/payments?skip=${skip}&limit=30`;
+    if (recon !== '') url += `&reconciled=${recon}`;
+    if (window._filterRatepayerId) url += `&ratepayer_id=${window._filterRatepayerId}`;
+    const data = await apiFetch(url);
+    document.getElementById('countBadge').textContent = `${data.total} payments`;
+    const tbody = document.getElementById('pmtTable');
+    if (data.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.items.map(p => `
+      <tr>
+        <td><code style="font-size:11.5px;color:var(--success)">${p.receipt_number}</code></td>
+        <td>
+          <div style="font-weight:500;font-size:13px">${p.ratepayer_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${p.account_number}</div>
+        </td>
+        <td class="fw-bold text-success">${fmtMoney(p.amount)}</td>
+        <td><span class="badge badge-info">${p.payment_method}</span></td>
+        <td>${p.currency}</td>
+        <td style="font-size:12.5px;color:var(--text2)">${fmtDate(p.payment_date)}</td>
+        <td>${p.is_reconciled ? '<span class="badge badge-paid">Yes</span>' : '<span class="badge badge-overdue">No</span>'}</td>
+        <td>${anomalyBadge(p.anomaly_flag)}</td>
+        <td style="white-space:nowrap">
+          ${!p.is_reconciled ? `<button class="btn btn-sm btn-secondary" onclick="reconcile(${p.id})">Reconcile</button>` : ''}
+          ${canDelete && !p.is_reconciled ? `<button class="btn btn-sm btn-danger" onclick="deletePayment(${p.id},'${p.receipt_number}')">Delete</button>` : ''}
+        </td>
+      </tr>`).join('');
+    renderPagination('pagination', data.total, 30, page, 'loadPayments');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function reconcile(id) {
+  try {
+    await apiPatch(`/api/payments/${id}/reconcile`);
+    toast('Payment reconciled', 'success');
+    loadPayments(currentPage);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deletePayment(id, receipt) {
+  await confirmDelete(`Delete payment ${receipt}?\n\nThis will reverse any amounts credited to the linked invoice.`, async () => {
+    try {
+      await apiDelete(`/api/payments/${id}`);
+      toast('Payment deleted', 'success');
+      loadPayments(currentPage);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function recordPayment() {
+  const invid = document.getElementById('f_invid').value;
+  const data = {
+    ratepayer_id:   parseInt(document.getElementById('f_rpid').value),
+    invoice_id:     invid ? parseInt(invid) : null,
+    amount:         parseFloat(document.getElementById('f_amount').value),
+    currency:       document.getElementById('f_currency').value,
+    payment_method: document.getElementById('f_method').value,
+    notes:          document.getElementById('f_notes').value,
+  };
+  if (!data.ratepayer_id || !data.amount) { toast('Ratepayer ID and amount required', 'warning'); return; }
+  try {
+    const res = await apiPost('/api/payments', data);
+    toast(`Receipt ${res.receipt_number} issued`, 'success');
+    closeModal('addModal');
+    loadPayments();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+loadPayments();
+</script>
+</body>
+</html>

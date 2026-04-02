@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Dashboard</span>
+      <div class="topbar-right">
+        <span style="font-size:12px;color:var(--text2)" id="dateDisplay"></span>
+      </div>
+    </div>
+    <div class="page-content">
+
+      <!-- KPI Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card blue" onclick="navigateTo('invoices.html')" style="cursor:pointer" title="View all invoices"><div class="stat-icon">💰</div><div class="stat-value" id="statBilled">—</div><div class="stat-label">Total Billed (USD)</div></div>
+        <div class="stat-card green" onclick="navigateTo('payments.html')" style="cursor:pointer" title="View all payments"><div class="stat-icon">✅</div><div class="stat-value" id="statCollected">—</div><div class="stat-label">Total Collected</div></div>
+        <div class="stat-card yellow" onclick="navigateTo('aging.html')" style="cursor:pointer" title="View debtors aging"><div class="stat-icon">⏳</div><div class="stat-value" id="statOutstanding">—</div><div class="stat-label">Outstanding Balance</div></div>
+        <div class="stat-card red" onclick="navigateTo('aging.html')" style="cursor:pointer" title="View aging analysis"><div class="stat-icon">🚨</div><div class="stat-value" id="statLeakage">—</div><div class="stat-label">Est. Revenue Leakage</div></div>
+        <div class="stat-card blue" onclick="navigateTo('reports.html')" style="cursor:pointer" title="View financial reports"><div class="stat-icon">📈</div><div class="stat-value" id="statRate">—</div><div class="stat-label">Collection Rate</div></div>
+        <div class="stat-card red" onclick="navigateTo('leakage.html')" style="cursor:pointer" title="View leakage alerts"><div class="stat-icon">⚠️</div><div class="stat-value" id="statAlerts">—</div><div class="stat-label">Active Alerts</div></div>
+        <div class="stat-card yellow" onclick="navigateTo('invoices.html',{anomaly:'high'})" style="cursor:pointer" title="View high-anomaly invoices"><div class="stat-icon">🔍</div><div class="stat-value" id="statAnomalies">—</div><div class="stat-label">Anomaly Flags</div></div>
+        <div class="stat-card green" onclick="navigateTo('ratepayers.html')" style="cursor:pointer" title="View ratepayer registry"><div class="stat-icon">👥</div><div class="stat-value" id="statRatepayers">—</div><div class="stat-label">Ratepayers</div></div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid-2 mb-4">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Monthly Revenue Trend</span>
+          </div>
+          <canvas id="trendChart" height="200"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Revenue by Category</span>
+          </div>
+          <canvas id="categoryChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Alerts + Quick Stats -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🚨 Leakage Alerts</span>
+            <a href="leakage.html" class="btn btn-sm btn-secondary">View All</a>
+          </div>
+          <div id="alertsContainer"><div class="empty-state"><div class="empty-icon">🔔</div><p>Loading alerts...</p></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 System Overview</span>
+          </div>
+          <div id="overviewContainer"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../js/shared.js"></script>
+<script>
+requireAuth();
+buildSidebar('dashboard');
+document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+Chart.defaults.color = '#8892a4';
+Chart.defaults.borderColor = '#2a3347';
+
+async function loadDashboard() {
+  try {
+    const [summary, trend, categories, alerts] = await Promise.all([
+      apiFetch('/api/dashboard/summary'),
+      apiFetch('/api/dashboard/monthly-trend'),
+      apiFetch('/api/dashboard/revenue-by-category'),
+      apiFetch('/api/dashboard/alerts'),
+    ]);
+
+    document.getElementById('statBilled').textContent = fmtMoney(summary.total_billed);
+    document.getElementById('statCollected').textContent = fmtMoney(summary.total_collected);
+    document.getElementById('statOutstanding').textContent = fmtMoney(summary.total_outstanding);
+    document.getElementById('statLeakage').textContent = fmtMoney(summary.leakage_estimate);
+    document.getElementById('statRate').textContent = summary.collection_rate + '%';
+    document.getElementById('statAlerts').textContent = summary.active_alerts;
+    document.getElementById('statAnomalies').textContent = summary.anomaly_count;
+    document.getElementById('statRatepayers').textContent = summary.ratepayers_count;
+
+    // Trend chart
+    new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trend.map(t => t.month),
+        datasets: [
+          { label: 'Billed', data: trend.map(t => t.billed), borderColor: '#3b7dd8', backgroundColor: 'rgba(59,125,216,0.1)', fill: true, tension: 0.4 },
+          { label: 'Collected', data: trend.map(t => t.collected), borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', fill: true, tension: 0.4 },
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$'+v.toLocaleString() } } } }
+    });
+
+    // Category chart
+    new Chart(document.getElementById('categoryChart'), {
+      type: 'bar',
+      data: {
+        labels: categories.map(c => c.category),
+        datasets: [
+          { label: 'Billed', data: categories.map(c => c.billed), backgroundColor: 'rgba(59,125,216,0.7)' },
+          { label: 'Collected', data: categories.map(c => c.collected), backgroundColor: 'rgba(46,204,113,0.7)' },
+        ]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+    });
+
+    // Alerts
+    const ac = document.getElementById('alertsContainer');
+    if (alerts.length === 0) {
+      ac.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No active alerts</p></div>';
+    } else {
+      ac.innerHTML = alerts.slice(0,5).map(a => `
+        <div class="alert-item ${a.severity}">
+          <div class="alert-dot"></div>
+          <div>
+            <div class="alert-type">${a.type}</div>
+            <div class="alert-desc">${a.description}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    // Overview
+    document.getElementById('overviewContainer').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${[
+          ['Total Invoices',   summary.invoices_count,           '🧾', 'invoices.html',  '{}'],
+          ['Total Payments',   summary.payments_count,           '💳', 'payments.html',  '{}'],
+          ['Overdue Accounts', summary.overdue_count,            '⏰', 'invoices.html',  '{"status":"overdue"}'],
+          ['Debtors Aging',    'View →',                         '⏳', 'aging.html',     '{}'],
+          ['Collection Rate',  summary.collection_rate + '%',    '📈', 'reports.html',   '{}'],
+        ].map(([label, val, icon, href, params]) => `
+          <div onclick="navigateTo('${href}',${params})"
+               style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg3);border-radius:8px;cursor:pointer;transition:background .15s"
+               onmouseover="this.style.background='rgba(59,125,216,.1)'" onmouseout="this.style.background='var(--bg3)'">
+            <span style="color:var(--text2);font-size:13px">${icon} ${label}</span>
+            <span style="font-weight:600;font-size:14px">${val}</span>
+          </div>`).join('')}
+      </div>`;
+
+  } catch(e) { toast('Failed to load dashboard: ' + e.message, 'error'); }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

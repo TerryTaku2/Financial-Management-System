@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reports — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.report-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
+.report-title { font-size:16px; font-weight:600; color:var(--text1); margin-bottom:4px; }
+.report-desc  { font-size:12.5px; color:var(--text2); margin-bottom:18px; }
+.report-actions { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:18px; }
+.report-table-wrap { overflow-x:auto; }
+.report-table-wrap table { width:100%; border-collapse:collapse; font-size:13px; }
+.report-table-wrap th { background:var(--bg3); color:var(--text2); font-size:11px; text-transform:uppercase;
+  padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+.report-table-wrap td { padding:9px 12px; border-bottom:1px solid var(--border); color:var(--text1); }
+.report-table-wrap tr:last-child td { border-bottom:none; }
+.report-table-wrap tr.total-row td { font-weight:700; background:var(--bg3); border-top:2px solid var(--border); }
+.report-table-wrap tr:hover td { background:var(--bg3); }
+.variance-pos { color:var(--success); font-weight:600; }
+.variance-neg { color:var(--danger); font-weight:600; }
+.summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px; }
+.summary-kpi { background:var(--bg3); border-radius:8px; padding:14px 16px; text-align:center; }
+.summary-kpi .kpi-label { font-size:11px; color:var(--text3); text-transform:uppercase; margin-bottom:4px; }
+.summary-kpi .kpi-value { font-size:18px; font-weight:700; color:var(--primary-light); }
+.section-tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px; flex-wrap:wrap; }
+.section-tab  { padding:8px 18px; font-size:13px; font-weight:500; cursor:pointer;
+  border-radius:6px 6px 0 0; color:var(--text2); background:transparent; border:none; border-bottom:2px solid transparent; }
+.section-tab.active { color:var(--primary-light); border-bottom-color:var(--primary-light); background:var(--bg3); }
+.tab-panel { display:none; } .tab-panel.active { display:block; }
+.entry-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.entry-grid .form-group { margin:0; }
+.targets-table-wrap { max-height:320px; overflow-y:auto; margin-top:12px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar"><span class="topbar-title">Reports &amp; Data Entry</span></div>
+    <div class="page-content">
+
+      <!-- ═══ 1. BUDGET DATA ENTRY ═══════════════════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Budget Data Entry</div>
+        <div class="report-desc">Enter departmental budget allocations manually or upload a CSV/Excel file. Downloaded budgets reflect instantly in the Budget page and Variance Report.</div>
+
+        <div class="section-tabs">
+          <button class="section-tab active" onclick="switchTab('budget','manual')">Manual Entry</button>
+          <button class="section-tab" onclick="switchTab('budget','upload')">Upload File</button>
+          <button class="section-tab" onclick="switchTab('budget','view')">Current Budgets</button>
+        </div>
+
+        <!-- Manual Entry -->
+        <div class="tab-panel active" id="budget-manual">
+          <div class="entry-grid">
+            <div class="form-group"><label>Fiscal Year</label><input id="b_fy" placeholder="e.g. 2025/2026"></div>
+            <div class="form-group"><label>Department</label>
+              <select id="b_dept">
+                <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
+                <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Category</label><input id="b_cat" placeholder="e.g. Operational"></div>
+            <div class="form-group"><label>Allocated (USD)</label><input id="b_alloc" type="number" step="0.01" placeholder="0.00"></div>
+            <div class="form-group"><label>Spent to Date (USD)</label><input id="b_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="saveBudgetEntry()">Save Budget Entry</button>
+            <button class="btn btn-secondary" onclick="switchTab('budget','view')">View All Budgets</button>
+          </div>
+        </div>
+
+        <!-- Upload -->
+        <div class="tab-panel" id="budget-upload">
+          <div style="background:var(--bg3);border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">📂</div>
+            <div style="font-weight:600;margin-bottom:4px">Drop a CSV or Excel file here, or click to browse</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Required columns: fiscal_year, department, category, allocated_amount, spent_amount</div>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="document.getElementById('budgetFileInput').click()">Browse File</button>
+              <input type="file" id="budgetFileInput" accept=".csv,.xlsx" style="display:none" onchange="uploadBudgetFile(this)">
+              <button class="btn btn-secondary" onclick="downloadExport('/api/templates/budgets?format=xlsx','template_budgets.xlsx')">📋 Download Template</button>
+              <button class="btn btn-secondary" onclick="downloadExport('/api/templates/budgets?format=csv','template_budgets.csv')">📋 CSV Template</button>
+            </div>
+          </div>
+          <div id="budgetUploadResult" style="margin-top:12px;font-size:13px"></div>
+        </div>
+
+        <!-- View -->
+        <div class="tab-panel" id="budget-view">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=csv','budget_variance.csv')">⬇ Export CSV</button>
+            <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=xlsx','budget_variance.xlsx')">⬇ Export Excel</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadBudgetView()">↻ Refresh</button>
+          </div>
+          <div class="targets-table-wrap report-table-wrap">
+            <table><thead><tr><th>Department</th><th>Fiscal Year</th><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Actions</th></tr></thead>
+            <tbody id="budgetViewTbody"><tr><td colspan="7" class="text-center text-muted" style="padding:20px">Click Refresh to load</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 2. REVENUE PERFORMANCE DATA ENTRY ══════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Revenue Performance Targets</div>
+        <div class="report-desc">Set planned/target revenue amounts by category and fiscal year. The Performance Report compares these targets against actual collections.</div>
+
+        <div class="section-tabs">
+          <button class="section-tab active" onclick="switchTab('target','manual')">Manual Entry</button>
+          <button class="section-tab" onclick="switchTab('target','upload')">Upload File</button>
+          <button class="section-tab" onclick="switchTab('target','view')">Current Targets</button>
+        </div>
+
+        <!-- Manual Entry -->
+        <div class="tab-panel active" id="target-manual">
+          <div class="entry-grid">
+            <div class="form-group"><label>Fiscal Year</label><input id="t_fy" placeholder="e.g. 2025/2026"></div>
+            <div class="form-group"><label>Revenue Category</label>
+              <select id="t_cat">
+                <option value="rates">Rates</option><option value="water">Water</option>
+                <option value="sewerage">Sewerage</option><option value="refuse">Refuse</option>
+                <option value="licensing">Licensing</option><option value="parking">Parking</option>
+                <option value="rentals">Rentals</option><option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Target Amount (USD)</label><input id="t_amount" type="number" step="0.01" placeholder="0.00"></div>
+            <div class="form-group"><label>Period</label>
+              <select id="t_period">
+                <option value="annual">Annual</option>
+                <option value="Q1">Q1 (Jul–Sep)</option><option value="Q2">Q2 (Oct–Dec)</option>
+                <option value="Q3">Q3 (Jan–Mar)</option><option value="Q4">Q4 (Apr–Jun)</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Notes (optional)</label><input id="t_notes" placeholder="e.g. includes penalty recovery"></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="saveTargetEntry()">Save Target</button>
+            <button class="btn btn-secondary" onclick="switchTab('target','view')">View All Targets</button>
+          </div>
+        </div>
+
+        <!-- Upload -->
+        <div class="tab-panel" id="target-upload">
+          <div style="background:var(--bg3);border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center">
+            <div style="font-size:32px;margin-bottom:8px">📂</div>
+            <div style="font-weight:600;margin-bottom:4px">Drop a CSV or Excel file here, or click to browse</div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Required columns: fiscal_year, category, target_amount, period, notes</div>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+              <button class="btn btn-primary" onclick="document.getElementById('targetFileInput').click()">Browse File</button>
+              <input type="file" id="targetFileInput" accept=".csv,.xlsx" style="display:none" onchange="uploadTargetFile(this)">
+              <button class="btn btn-secondary" onclick="downloadExport('/api/templates/revenue-targets?format=xlsx','template_revenue_targets.xlsx')">📋 Download Template</button>
+              <button class="btn btn-secondary" onclick="downloadExport('/api/templates/revenue-targets?format=csv','template_revenue_targets.csv')">📋 CSV Template</button>
+            </div>
+          </div>
+          <div id="targetUploadResult" style="margin-top:12px;font-size:13px"></div>
+        </div>
+
+        <!-- View -->
+        <div class="tab-panel" id="target-view">
+          <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+            <label style="font-size:12px;color:var(--text2)">Fiscal Year:</label>
+            <input id="targetFyFilter" placeholder="e.g. 2025/2026" style="padding:5px 10px;font-size:12px;width:130px">
+            <button class="btn btn-secondary btn-sm" onclick="loadTargetView()">↻ Refresh</button>
+          </div>
+          <div class="targets-table-wrap report-table-wrap">
+            <table><thead><tr><th>Fiscal Year</th><th>Category</th><th>Period</th><th>Target ($)</th><th>Notes</th><th>Actions</th></tr></thead>
+            <tbody id="targetViewTbody"><tr><td colspan="6" class="text-center text-muted" style="padding:20px">Click Refresh to load</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ 3. PERFORMANCE REPORT ══════════════════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Revenue Performance Report</div>
+        <div class="report-desc">Compares actual revenue collected against set targets by category. Shows variance, collection rate, and above/below target status.</div>
+        <div class="report-actions">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px;color:var(--text2)">Fiscal Year</label>
+            <input id="perfFy" placeholder="e.g. 2025/2026" style="padding:6px 10px;font-size:13px;width:140px">
+          </div>
+          <button class="btn btn-primary" onclick="loadPerformance()">Generate Report</button>
+          <button class="btn btn-secondary" onclick="exportPerf('csv')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="exportPerf('xlsx')">⬇ Excel</button>
+        </div>
+        <div id="perfKPIs" style="display:none" class="summary-grid"></div>
+        <div class="report-table-wrap">
+          <table id="perfTable" style="display:none">
+            <thead><tr>
+              <th>Category</th><th>Target ($)</th><th>Billed ($)</th><th>Collected ($)</th>
+              <th>Outstanding ($)</th><th>Collection Rate</th><th>Variance ($)</th><th>Variance (%)</th><th>Status</th>
+            </tr></thead>
+            <tbody id="perfTbody"></tbody>
+          </table>
+        </div>
+        <div class="grid-2" style="margin-top:20px">
+          <canvas id="perfBar" height="160" style="display:none"></canvas>
+          <canvas id="perfGauge" height="160" style="display:none"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══ 4. BUDGET VARIANCE REPORT ═════════════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Budget Variance Report</div>
+        <div class="report-desc">Compares allocated budget against actual approved expenditures by department. Highlights over-budget and under-utilised areas.</div>
+        <div class="report-actions">
+          <button class="btn btn-primary" onclick="loadVariance()">Generate Report</button>
+          <button class="btn btn-secondary" onclick="downloadExport('/api/reports/budget-variance?format=csv','budget_variance.csv')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="downloadExport('/api/reports/budget-variance?format=xlsx','budget_variance.xlsx')">⬇ Excel</button>
+        </div>
+        <div id="varianceKPIs" style="display:none" class="summary-grid"></div>
+        <div class="report-table-wrap">
+          <table id="varianceTable" style="display:none">
+            <thead><tr>
+              <th>Department</th><th>Fiscal Year</th><th>Category</th>
+              <th>Allocated ($)</th><th>Actual Spent ($)</th>
+              <th>Variance ($)</th><th>Variance (%)</th><th>Status</th>
+            </tr></thead>
+            <tbody id="varianceTbody"></tbody>
+          </table>
+        </div>
+        <canvas id="varianceChart" height="100" style="display:none;margin-top:20px"></canvas>
+      </div>
+
+      <!-- ═══ 5. FINANCIAL SUMMARY REPORT ════════════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Financial Summary Report</div>
+        <div class="report-desc">Revenue collection performance by category — billed, collected, outstanding, and collection rates.</div>
+        <div class="report-actions">
+          <button class="btn btn-primary" onclick="loadFinancial()">Generate Report</button>
+          <button class="btn btn-secondary" onclick="downloadExport('/api/reports/financial-summary?format=csv','financial_summary.csv')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="downloadExport('/api/reports/financial-summary?format=xlsx','financial_summary.xlsx')">⬇ Excel</button>
+        </div>
+        <div id="financialKPIs" style="display:none" class="summary-grid"></div>
+        <div class="report-table-wrap">
+          <table id="financialTable" style="display:none">
+            <thead><tr>
+              <th>Category</th><th>Invoices</th><th>Billed ($)</th>
+              <th>Collected ($)</th><th>Outstanding ($)</th><th>Collection Rate</th>
+            </tr></thead>
+            <tbody id="financialTbody"></tbody>
+          </table>
+        </div>
+        <div class="grid-2" style="margin-top:20px">
+          <canvas id="financialBar" height="160" style="display:none"></canvas>
+          <canvas id="financialPie" height="160" style="display:none"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══ 6. AUDIT TRAIL REPORT ══════════════════════════════════════════ -->
+      <div class="report-card">
+        <div class="report-title">Audit Trail Report</div>
+        <div class="report-desc">Export a date-filtered audit trail of all system actions. Available to Admin and Auditor roles only.</div>
+        <div class="report-actions">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px;color:var(--text2)">From</label>
+            <input type="date" id="auditFrom" style="padding:6px 10px;font-size:13px">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px;color:var(--text2)">To</label>
+            <input type="date" id="auditTo" style="padding:6px 10px;font-size:13px">
+          </div>
+          <button class="btn btn-primary" onclick="loadAuditPreview()">Preview</button>
+          <button class="btn btn-secondary" onclick="exportAudit('csv')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="exportAudit('xlsx')">⬇ Excel</button>
+        </div>
+        <div id="auditCount" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
+        <div class="report-table-wrap">
+          <table id="auditTable" style="display:none">
+            <thead><tr><th>#</th><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>Timestamp</th></tr></thead>
+            <tbody id="auditTbody"></tbody>
+          </table>
+        </div>
+        <div id="auditMore" style="display:none;font-size:12px;color:var(--text2);margin-top:8px;text-align:center"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit Target Modal -->
+<div class="modal-overlay" id="editTargetModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span class="modal-title" id="editTargetTitle">Edit Revenue Target</span>
+      <button class="modal-close" onclick="closeModal('editTargetModal')">×</button>
+    </div>
+    <input type="hidden" id="et_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Target Amount (USD)</label><input id="et_amount" type="number" step="0.01"></div>
+      <div class="form-group"><label>Period</label>
+        <select id="et_period">
+          <option value="annual">Annual</option>
+          <option value="Q1">Q1</option><option value="Q2">Q2</option>
+          <option value="Q3">Q3</option><option value="Q4">Q4</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notes</label><input id="et_notes" placeholder="Optional notes"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editTargetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTargetEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Budget Modal -->
+<div class="modal-overlay" id="editBudgetModal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span class="modal-title" id="editBudgetTitle">Edit Budget</span>
+      <button class="modal-close" onclick="closeModal('editBudgetModal')">×</button>
+    </div>
+    <input type="hidden" id="eb_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Allocated Amount (USD)</label><input id="eb_alloc" type="number" step="0.01"></div>
+      <div class="form-group"><label>Spent Amount (USD)</label><input id="eb_spent" type="number" step="0.01"></div>
+    </div>
+    <div class="form-group"><label>Category</label><input id="eb_cat"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editBudgetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBudgetEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('reports');
+
+const user = getUser();
+const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(group, name) {
+  document.querySelectorAll(`[id^="${group}-"]`).forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`.section-tab`).forEach(btn => {
+    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${group}'`))
+      btn.classList.remove('active');
+  });
+  document.getElementById(`${group}-${name}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Budget Entry ─────────────────────────────────────────────────────────────
+async function saveBudgetEntry() {
+  if (!canManage) { toast('You do not have permission to manage budgets','warning'); return; }
+  const data = {
+    fiscal_year:      document.getElementById('b_fy').value.trim(),
+    department:       document.getElementById('b_dept').value,
+    category:         document.getElementById('b_cat').value.trim() || 'Operational',
+    allocated_amount: parseFloat(document.getElementById('b_alloc').value) || 0,
+    spent_amount:     parseFloat(document.getElementById('b_spent').value) || 0,
+  };
+  if (!data.fiscal_year || !data.allocated_amount) { toast('Fiscal year and allocated amount required','warning'); return; }
+  try {
+    await apiPost('/api/budgets', data);
+    toast(`Budget saved: ${data.department} ${data.fiscal_year}`, 'success');
+    ['b_fy','b_cat','b_alloc'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('b_spent').value = '0';
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function uploadBudgetFile(input) {
+  const file = input.files[0]; if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/budgets', file);
+    document.getElementById('budgetUploadResult').innerHTML =
+      `<span style="color:var(--success)">✅ ${res.message}</span>` +
+      (res.errors?.length ? `<br><span style="color:var(--warning)">⚠ ${res.errors.length} warning(s)</span>` : '');
+    if (res.errors?.length) alert(`Warnings:\n${res.errors.join('\n')}`);
+    toast(res.message, 'success');
+  } catch(e) { toast(e.message,'error'); }
+  input.value = '';
+}
+
+async function loadBudgetView() {
+  try {
+    const data = await apiFetch('/api/budgets');
+    const tbody = document.getElementById('budgetViewTbody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:20px">No budget entries found</td></tr>'; return; }
+    tbody.innerHTML = data.map(b => `<tr>
+      <td style="font-weight:500">${b.department}</td>
+      <td>${b.fiscal_year}</td>
+      <td style="color:var(--text2)">${b.category}</td>
+      <td>${fmtMoney(b.allocated)}</td>
+      <td class="text-warning">${fmtMoney(b.spent)}</td>
+      <td class="${b.remaining < 0 ? 'text-danger':'text-success'}">${fmtMoney(b.remaining)}</td>
+      <td style="white-space:nowrap">
+        ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openBudgetEdit(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteBudgetEntry(${b.id},'${b.department}')">Delete</button>` : '—'}
+      </td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function openBudgetEdit(b) {
+  document.getElementById('eb_id').value    = b.id;
+  document.getElementById('editBudgetTitle').textContent = `Edit: ${b.department} ${b.fiscal_year}`;
+  document.getElementById('eb_alloc').value = b.allocated;
+  document.getElementById('eb_spent').value = b.spent;
+  document.getElementById('eb_cat').value   = b.category;
+  openModal('editBudgetModal');
+}
+
+async function saveBudgetEdit() {
+  const id = document.getElementById('eb_id').value;
+  const data = {
+    allocated_amount: parseFloat(document.getElementById('eb_alloc').value) || 0,
+    spent_amount:     parseFloat(document.getElementById('eb_spent').value) || 0,
+    category:         document.getElementById('eb_cat').value.trim(),
+  };
+  try {
+    await apiPut(`/api/budgets/${id}`, data);
+    toast('Budget updated','success');
+    closeModal('editBudgetModal');
+    loadBudgetView();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteBudgetEntry(id, dept) {
+  await confirmDelete(`Delete budget for ${dept}?`, async () => {
+    try { await apiDelete(`/api/budgets/${id}`); toast('Budget deleted','success'); loadBudgetView(); }
+    catch(e) { toast(e.message,'error'); }
+  });
+}
+
+// ── Revenue Targets ──────────────────────────────────────────────────────────
+async function saveTargetEntry() {
+  if (!canManage) { toast('You do not have permission to set revenue targets','warning'); return; }
+  const data = {
+    fiscal_year:   document.getElementById('t_fy').value.trim(),
+    category:      document.getElementById('t_cat').value,
+    target_amount: parseFloat(document.getElementById('t_amount').value) || 0,
+    period:        document.getElementById('t_period').value,
+    notes:         document.getElementById('t_notes').value || null,
+  };
+  if (!data.fiscal_year || !data.target_amount) { toast('Fiscal year and target amount required','warning'); return; }
+  try {
+    await apiPost('/api/revenue-targets', data);
+    toast(`Target saved: ${data.category} ${data.fiscal_year}`, 'success');
+    document.getElementById('t_amount').value = '';
+    document.getElementById('t_notes').value  = '';
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function uploadTargetFile(input) {
+  const file = input.files[0]; if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/revenue-targets', file);
+    document.getElementById('targetUploadResult').innerHTML =
+      `<span style="color:var(--success)">✅ ${res.message}</span>` +
+      (res.errors?.length ? `<br><span style="color:var(--warning)">⚠ ${res.errors.length} warning(s)</span>` : '');
+    if (res.errors?.length) alert(`Warnings:\n${res.errors.join('\n')}`);
+    toast(res.message,'success');
+  } catch(e) { toast(e.message,'error'); }
+  input.value = '';
+}
+
+async function loadTargetView() {
+  const fy = document.getElementById('targetFyFilter').value.trim();
+  try {
+    let url = '/api/revenue-targets';
+    if (fy) url += `?fiscal_year=${encodeURIComponent(fy)}`;
+    const data = await apiFetch(url);
+    const tbody = document.getElementById('targetViewTbody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No targets found</td></tr>'; return; }
+    tbody.innerHTML = data.map(t => `<tr>
+      <td>${t.fiscal_year}</td>
+      <td style="font-weight:500;text-transform:capitalize">${t.category}</td>
+      <td><span class="badge badge-info">${t.period}</span></td>
+      <td>${fmtMoney(t.target_amount)}</td>
+      <td style="color:var(--text2);font-size:12px">${t.notes || '—'}</td>
+      <td style="white-space:nowrap">
+        ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openTargetEdit(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteTarget(${t.id},'${t.category}')">Delete</button>` : '—'}
+      </td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function openTargetEdit(t) {
+  document.getElementById('et_id').value = t.id;
+  document.getElementById('editTargetTitle').textContent = `Edit: ${t.category} ${t.fiscal_year} (${t.period})`;
+  document.getElementById('et_amount').value = t.target_amount;
+  document.getElementById('et_period').value = t.period;
+  document.getElementById('et_notes').value  = t.notes || '';
+  openModal('editTargetModal');
+}
+
+async function saveTargetEdit() {
+  const id = document.getElementById('et_id').value;
+  const data = {
+    target_amount: parseFloat(document.getElementById('et_amount').value) || 0,
+    period:        document.getElementById('et_period').value,
+    notes:         document.getElementById('et_notes').value || null,
+  };
+  try {
+    await apiPut(`/api/revenue-targets/${id}`, data);
+    toast('Target updated','success');
+    closeModal('editTargetModal');
+    loadTargetView();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteTarget(id, cat) {
+  await confirmDelete(`Delete revenue target for "${cat}"?`, async () => {
+    try { await apiDelete(`/api/revenue-targets/${id}`); toast('Target deleted','success'); loadTargetView(); }
+    catch(e) { toast(e.message,'error'); }
+  });
+}
+
+// ── Performance Report ────────────────────────────────────────────────────────
+let perfBar = null, perfGauge = null;
+
+async function loadPerformance() {
+  const fy = document.getElementById('perfFy').value.trim();
+  try {
+    let url = '/api/reports/performance?format=json';
+    if (fy) url += `&fiscal_year=${encodeURIComponent(fy)}`;
+    const data = await apiFetch(url);
+    const { rows, totals } = data;
+    if (!rows.length) { toast('No data found for the selected fiscal year','warning'); return; }
+
+    // KPIs
+    const hasTargets = rows.some(r => r.target > 0);
+    document.getElementById('perfKPIs').innerHTML = [
+      ['Revenue Target',   fmtMoney(totals.total_target)],
+      ['Total Billed',     fmtMoney(totals.total_billed)],
+      ['Total Collected',  fmtMoney(totals.total_collected)],
+      ['Overall Variance', fmtMoney(totals.overall_variance)],
+    ].map(([l,v],i)=>`<div class="summary-kpi"><div class="kpi-label">${l}</div>
+      <div class="kpi-value" style="color:${i===3?(totals.overall_variance>=0?'var(--success)':'var(--danger)'):'var(--primary-light)'}">${v}</div></div>`).join('');
+    document.getElementById('perfKPIs').style.display = '';
+
+    // Table
+    document.getElementById('perfTbody').innerHTML =
+      rows.map(r => {
+        const varCls    = r.variance > 0 ? 'variance-pos' : r.variance < 0 ? 'variance-neg' : '';
+        const statusCls = r.status === 'Above Target' ? 'badge-paid' : r.status === 'Below Target' ? 'badge-danger' : 'badge-pending';
+        return `<tr>
+          <td style="font-weight:500;text-transform:capitalize">${r.category}</td>
+          <td>${r.target > 0 ? fmtMoney(r.target) : '<span style="color:var(--text3)">—</span>'}</td>
+          <td>${fmtMoney(r.billed)}</td>
+          <td class="text-success">${fmtMoney(r.collected)}</td>
+          <td class="${r.outstanding>0?'text-danger':''}">${fmtMoney(r.outstanding)}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="flex:1;background:var(--bg3);border-radius:3px;height:6px;overflow:hidden;min-width:50px">
+                <div style="width:${Math.min(r.collection_rate,100)}%;height:100%;background:${r.collection_rate>=80?'var(--success)':r.collection_rate>=50?'var(--warning)':'var(--danger)'};border-radius:3px"></div>
+              </div>
+              <span style="font-size:12px;min-width:36px">${r.collection_rate}%</span>
+            </div>
+          </td>
+          <td class="${varCls}">${r.target > 0 ? fmtMoney(r.variance) : '—'}</td>
+          <td class="${varCls}">${r.target > 0 ? r.variance_pct+'%' : '—'}</td>
+          <td><span class="badge ${statusCls}">${r.status}</span></td>
+        </tr>`;
+      }).join('') + `<tr class="total-row">
+        <td>TOTAL</td>
+        <td>${fmtMoney(totals.total_target)}</td>
+        <td>${fmtMoney(totals.total_billed)}</td>
+        <td class="text-success">${fmtMoney(totals.total_collected)}</td>
+        <td></td><td></td>
+        <td class="${totals.overall_variance>=0?'variance-pos':'variance-neg'}">${fmtMoney(totals.overall_variance)}</td>
+        <td></td><td></td>
+      </tr>`;
+    document.getElementById('perfTable').style.display = '';
+
+    // Charts
+    if (perfBar)   perfBar.destroy();
+    if (perfGauge) perfGauge.destroy();
+    document.getElementById('perfBar').style.display   = '';
+    document.getElementById('perfGauge').style.display = '';
+    perfBar = new Chart(document.getElementById('perfBar'), {
+      type: 'bar', data: {
+        labels: rows.map(r => r.category),
+        datasets: [
+          { label:'Target',    data: rows.map(r => r.target),    backgroundColor:'rgba(59,125,216,0.5)', borderColor:'rgba(59,125,216,0.8)', borderWidth:1 },
+          { label:'Collected', data: rows.map(r => r.collected), backgroundColor:'rgba(39,174,96,0.6)',  borderColor:'rgba(39,174,96,0.9)',  borderWidth:1 },
+          { label:'Billed',    data: rows.map(r => r.billed),    backgroundColor:'rgba(243,156,18,0.4)', borderColor:'rgba(243,156,18,0.8)', borderWidth:1 },
+        ]
+      },
+      options:{ responsive:true, plugins:{legend:{position:'bottom'}},
+                scales:{y:{beginAtZero:true, ticks:{callback:v=>'$'+v.toLocaleString()}}} }
+    });
+    perfGauge = new Chart(document.getElementById('perfGauge'), {
+      type: 'doughnut', data: {
+        labels: rows.map(r => r.category),
+        datasets: [{ data: rows.map(r => r.collected),
+          backgroundColor: ['#3b7dd8','#27ae60','#f39c12','#e74c3c','#9b59b6','#1abc9c','#e67e22','#95a5a6'] }]
+      },
+      options:{ responsive:true, plugins:{ legend:{position:'bottom'},
+        title:{ display:true, text:'Revenue Collected by Category', color:'var(--text2)', font:{size:12} },
+        tooltip:{ callbacks:{ label: ctx=>`${ctx.label}: $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}` } } } }
+    });
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function exportPerf(fmt) {
+  const fy = document.getElementById('perfFy').value.trim();
+  let url = `/api/reports/performance?format=${fmt}`;
+  if (fy) url += `&fiscal_year=${encodeURIComponent(fy)}`;
+  downloadExport(url, `performance_report.${fmt}`);
+}
+
+// ── Budget Variance ──────────────────────────────────────────────────────────
+let varChart = null;
+async function loadVariance() {
+  try {
+    const rows = await apiFetch('/api/reports/budget-variance?format=json');
+    if (!rows.length) { document.getElementById('varianceTbody').innerHTML = '<tr><td colspan="8" class="text-center text-muted">No budget data. Enter budgets above first.</td></tr>'; document.getElementById('varianceTable').style.display=''; return; }
+    const totalAlloc = rows.reduce((s,r)=>s+r.allocated,0);
+    const totalSpent = rows.reduce((s,r)=>s+r.actual_spent,0);
+    document.getElementById('varianceKPIs').innerHTML = [
+      ['Total Allocated',    fmtMoney(totalAlloc)],
+      ['Total Spent',        fmtMoney(totalSpent)],
+      ['Net Variance',       fmtMoney(totalAlloc-totalSpent)],
+      ['Depts Over Budget',  rows.filter(r=>r.variance<0).length],
+    ].map(([l,v])=>`<div class="summary-kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
+    document.getElementById('varianceKPIs').style.display = '';
+    document.getElementById('varianceTbody').innerHTML = rows.map(r => {
+      const c = r.variance<0?'variance-neg':r.variance>0?'variance-pos':'';
+      const s = r.status==='Over Budget'?'badge-danger':r.status==='Under Budget'?'badge-paid':'badge-pending';
+      return `<tr>
+        <td style="font-weight:500">${r.department}</td><td>${r.fiscal_year}</td>
+        <td style="color:var(--text2)">${r.category}</td>
+        <td>${fmtMoney(r.allocated)}</td><td>${fmtMoney(r.actual_spent)}</td>
+        <td class="${c} fw-bold">${fmtMoney(r.variance)}</td>
+        <td class="${c}">${r.variance_pct}%</td>
+        <td><span class="badge ${s}">${r.status}</span></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('varianceTable').style.display = '';
+    if (varChart) varChart.destroy();
+    document.getElementById('varianceChart').style.display = '';
+    varChart = new Chart(document.getElementById('varianceChart'), {
+      type:'bar', data:{
+        labels: rows.map(r=>r.department),
+        datasets:[
+          {label:'Allocated',    data:rows.map(r=>r.allocated),    backgroundColor:'rgba(59,125,216,0.6)'},
+          {label:'Actual Spent', data:rows.map(r=>r.actual_spent), backgroundColor:'rgba(243,156,18,0.6)'},
+        ]
+      },
+      options:{responsive:true,plugins:{legend:{position:'bottom'}},
+               scales:{y:{beginAtZero:true,ticks:{callback:v=>'$'+v.toLocaleString()}}}}
+    });
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Financial Summary ────────────────────────────────────────────────────────
+let finBar = null, finPie = null;
+async function loadFinancial() {
+  try {
+    const data = await apiFetch('/api/reports/financial-summary?format=json');
+    const {rows, totals} = data;
+    document.getElementById('financialKPIs').innerHTML = [
+      ['Total Billed',fmtMoney(totals.total_billed)],['Total Collected',fmtMoney(totals.total_collected)],
+      ['Total Outstanding',fmtMoney(totals.total_outstanding)],['Collection Rate',totals.collection_rate+'%'],
+    ].map(([l,v])=>`<div class="summary-kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div></div>`).join('');
+    document.getElementById('financialKPIs').style.display = '';
+    document.getElementById('financialTbody').innerHTML =
+      rows.map(r=>`<tr>
+        <td style="font-weight:500;text-transform:capitalize">${r.category}</td>
+        <td>${r.invoice_count}</td><td>${fmtMoney(r.billed)}</td>
+        <td class="text-success">${fmtMoney(r.collected)}</td>
+        <td class="${r.outstanding>0?'text-danger':''}">${fmtMoney(r.outstanding)}</td>
+        <td><div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;min-width:60px">
+            <div style="width:${Math.min(r.collection_rate,100)}%;height:100%;background:${r.collection_rate>=80?'var(--success)':r.collection_rate>=50?'var(--warning)':'var(--danger)'};border-radius:4px"></div>
+          </div>
+          <span style="font-size:12px;min-width:40px">${r.collection_rate}%</span>
+        </div></td>
+      </tr>`).join('') +
+      `<tr class="total-row"><td>TOTAL</td><td>${rows.reduce((s,r)=>s+r.invoice_count,0)}</td>
+       <td>${fmtMoney(totals.total_billed)}</td><td class="text-success">${fmtMoney(totals.total_collected)}</td>
+       <td class="text-danger">${fmtMoney(totals.total_outstanding)}</td><td>${totals.collection_rate}%</td></tr>`;
+    document.getElementById('financialTable').style.display = '';
+    if (finBar) finBar.destroy(); if (finPie) finPie.destroy();
+    document.getElementById('financialBar').style.display = '';
+    document.getElementById('financialPie').style.display = '';
+    finBar = new Chart(document.getElementById('financialBar'),{type:'bar',data:{labels:rows.map(r=>r.category),datasets:[{label:'Billed',data:rows.map(r=>r.billed),backgroundColor:'rgba(59,125,216,0.6)'},{label:'Collected',data:rows.map(r=>r.collected),backgroundColor:'rgba(39,174,96,0.6)'}]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'$'+v.toLocaleString()}}}}});
+    finPie  = new Chart(document.getElementById('financialPie'),{type:'doughnut',data:{labels:['Collected','Outstanding'],datasets:[{data:[totals.total_collected,totals.total_outstanding],backgroundColor:['rgba(39,174,96,0.7)','rgba(231,76,60,0.7)'],borderColor:['#27ae60','#e74c3c'],borderWidth:1}]},options:{responsive:true,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:ctx=>' $'+ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}}}}});
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Audit Trail ──────────────────────────────────────────────────────────────
+const actionColors = { LOGIN:'info', CREATE:'paid', UPDATE:'warning', IMPORT:'info', FLAG:'danger', DELETE:'danger' };
+async function loadAuditPreview() {
+  const from = document.getElementById('auditFrom').value;
+  const to   = document.getElementById('auditTo').value;
+  try {
+    let url = '/api/audit-logs?limit=50';
+    if (from) url += `&date_from=${from}`;
+    if (to)   url += `&date_to=${to}`;
+    const data = await apiFetch(url);
+    document.getElementById('auditCount').textContent = `Showing ${data.items.length} of ${data.total} entries`;
+    document.getElementById('auditTbody').innerHTML = data.items.map((log,i)=>`<tr>
+      <td style="color:var(--text3);font-size:12px">${i+1}</td>
+      <td style="font-weight:500">${log.user}</td>
+      <td><span class="badge badge-${actionColors[log.action]||'info'}">${log.action}</span></td>
+      <td style="color:var(--text2);font-size:12px">${log.table_name}</td>
+      <td style="font-size:12.5px">${log.description}</td>
+      <td style="font-size:12px;color:var(--text2)">${log.timestamp}</td>
+    </tr>`).join('');
+    document.getElementById('auditTable').style.display = '';
+    document.getElementById('auditMore').style.display = data.total > 50 ? '' : 'none';
+    document.getElementById('auditMore').textContent   = `Showing first 50 of ${data.total}. Export to see all.`;
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function exportAudit(fmt) {
+  const from = document.getElementById('auditFrom').value;
+  const to   = document.getElementById('auditTo').value;
+  let url = `/api/reports/audit-trail?format=${fmt}`;
+  if (from) url += `&date_from=${from}`;
+  if (to)   url += `&date_to=${to}`;
+  downloadExport(url, `audit_trail.${fmt}`);
+}
+
+// Pre-fill date range
+(function() {
+  const now = new Date(), start = new Date(now.getFullYear(), now.getMonth(), 1);
+  document.getElementById('auditTo').value   = now.toISOString().slice(0,10);
+  document.getElementById('auditFrom').value = start.toISOString().slice(0,10);
+  // Pre-fill fiscal year fields
+  const fy = `${now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear()-1}/${now.getMonth() >= 6 ? now.getFullYear()+1 : now.getFullYear()}`;
+  document.getElementById('b_fy').value = fy;
+  document.getElementById('t_fy').value = fy;
+  document.getElementById('perfFy').value = fy;
+  document.getElementById('targetFyFilter').value = fy;
+})();
+</script>
+</body>
+</html>

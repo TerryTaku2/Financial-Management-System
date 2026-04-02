@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aging Analysis — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Page layout ───────────────────────────────────────────── */
+.aging-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:28px; }
+.aging-title { font-size:17px; font-weight:700; color:var(--text1); margin-bottom:4px; }
+.aging-sub   { font-size:12.5px; color:var(--text2); margin-bottom:18px; }
+
+/* ── KPI buckets ───────────────────────────────────────────── */
+.bucket-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:20px; }
+.bucket-card { border-radius:10px; padding:14px 10px; text-align:center; position:relative; overflow:hidden; }
+.bucket-card .b-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+.bucket-card .b-amount { font-size:15px; font-weight:700; margin-bottom:2px; }
+.bucket-card .b-count  { font-size:11px; opacity:.8; }
+.bucket-card .b-bar    { position:absolute; bottom:0; left:0; height:3px; border-radius:0 0 10px 10px; }
+.bc-current  { background:rgba(39,174,96,.12);  color:var(--success);  border:1px solid rgba(39,174,96,.3);  }
+.bc-30       { background:rgba(59,125,216,.12); color:var(--primary-light); border:1px solid rgba(59,125,216,.3); }
+.bc-60       { background:rgba(243,156,18,.12); color:var(--warning);  border:1px solid rgba(243,156,18,.3); }
+.bc-90       { background:rgba(230,126,34,.15); color:#e67e22;         border:1px solid rgba(230,126,34,.3); }
+.bc-120      { background:rgba(192,57,43,.12);  color:#c0392b;         border:1px solid rgba(192,57,43,.3);  }
+.bc-120plus  { background:rgba(142,68,173,.15); color:#8e44ad;         border:1px solid rgba(142,68,173,.3); }
+
+/* ── Aging table ───────────────────────────────────────────── */
+.aging-table-wrap { overflow-x:auto; margin-top:16px; }
+.aging-table-wrap table { width:100%; border-collapse:collapse; font-size:12.5px; white-space:nowrap; }
+.aging-table-wrap th { background:var(--bg3); color:var(--text2); font-size:10.5px; text-transform:uppercase;
+  padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); border-right:1px solid var(--border); }
+.aging-table-wrap th:first-child, .aging-table-wrap th:nth-child(2) { text-align:left; }
+.aging-table-wrap td { padding:8px 10px; border-bottom:1px solid var(--border); border-right:1px solid var(--border);
+  text-align:right; color:var(--text1); }
+.aging-table-wrap td:first-child, .aging-table-wrap td:nth-child(2) { text-align:left; }
+.aging-table-wrap tr:hover td { background:rgba(59,125,216,.05); }
+.aging-table-wrap tr.total-row td { font-weight:700; background:var(--bg3); border-top:2px solid var(--border); font-size:13px; }
+.aging-table-wrap .col-120plus { color:#8e44ad; font-weight:600; }
+.aging-table-wrap .col-120     { color:#c0392b; font-weight:500; }
+.aging-table-wrap .col-90      { color:#e67e22; }
+.aging-table-wrap .col-60      { color:var(--warning); }
+.aging-table-wrap .col-30      { color:var(--primary-light); }
+.aging-table-wrap .col-current { color:var(--success); }
+.aging-table-wrap .col-total   { font-weight:700; color:var(--text1); background:rgba(0,0,0,.03); }
+.zero-cell { color:var(--text3) !important; font-weight:400 !important; }
+
+/* ── Detail drawer ─────────────────────────────────────────── */
+.detail-panel { background:var(--bg3); border-radius:8px; padding:16px; margin-top:16px; display:none; }
+.detail-panel.open { display:block; }
+.detail-panel table { width:100%; border-collapse:collapse; font-size:12px; }
+.detail-panel th { text-align:left; padding:6px 8px; color:var(--text2); font-size:10.5px; text-transform:uppercase; border-bottom:1px solid var(--border); }
+.detail-panel td { padding:7px 8px; border-bottom:1px solid var(--border); }
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.aging-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.aging-toolbar select, .aging-toolbar input { padding:6px 10px; font-size:13px; }
+.section-divider { border:none; border-top:2px solid var(--border); margin:32px 0 28px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Debtors &amp; Creditors Aging Analysis</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/aging/debtors?format=csv','debtors_aging.csv')">⬇ Debtors CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/aging/debtors?format=xlsx','debtors_aging.xlsx')">⬇ Debtors Excel</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/aging/creditors?format=csv','creditors_aging.csv')">⬇ Creditors CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/aging/creditors?format=xlsx','creditors_aging.xlsx')">⬇ Creditors Excel</button>
+      </div>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ════════════════════════════════════════════════════════
+           DEBTORS AGING  (Accounts Receivable)
+           ════════════════════════════════════════════════════════ -->
+      <div class="aging-card">
+        <div class="aging-title">Debtors Aging — Accounts Receivable</div>
+        <div class="aging-sub">Outstanding invoice balances owed by ratepayers, categorised by how long they have been overdue.</div>
+
+        <div class="aging-toolbar">
+          <select id="debtorZone" onchange="loadDebtors()">
+            <option value="">All Zones</option>
+            <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
+            <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
+            <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+          </select>
+          <input id="debtorSearch" placeholder="Filter by name or account..." style="min-width:220px" oninput="filterDebtors()">
+          <button class="btn btn-primary" onclick="loadDebtors()">↻ Refresh</button>
+          <span id="debtorCount" style="font-size:12px;color:var(--text2)"></span>
+        </div>
+
+        <!-- Bucket KPIs -->
+        <div class="bucket-grid" id="debtorBuckets">
+          <div class="bucket-card bc-current"><div class="b-label">Current</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-30"><div class="b-label">1–30 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-60"><div class="b-label">31–60 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-90"><div class="b-label">61–90 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-120"><div class="b-label">91–120 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-120plus"><div class="b-label">120+ Days</div><div class="b-amount">—</div></div>
+        </div>
+
+        <!-- Chart + Summary -->
+        <div class="grid-2" style="margin-bottom:20px">
+          <canvas id="debtorBar" height="180"></canvas>
+          <canvas id="debtorPie" height="180"></canvas>
+        </div>
+
+        <!-- Aging Table -->
+        <div class="aging-table-wrap" id="debtorTableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left">Account #</th>
+                <th style="text-align:left;min-width:160px">Ratepayer</th>
+                <th style="text-align:left">Zone</th>
+                <th>Invoices</th>
+                <th class="col-current">Current</th>
+                <th class="col-30">1–30 Days</th>
+                <th class="col-60">31–60 Days</th>
+                <th class="col-90">61–90 Days</th>
+                <th class="col-120">91–120 Days</th>
+                <th class="col-120plus">120+ Days</th>
+                <th class="col-total">Total</th>
+              </tr>
+            </thead>
+            <tbody id="debtorTbody">
+              <tr><td colspan="11" class="text-center text-muted" style="padding:32px">Click Refresh to load data</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+
+      <!-- ════════════════════════════════════════════════════════
+           CREDITORS AGING  (Accounts Payable)
+           ════════════════════════════════════════════════════════ -->
+      <div class="aging-card">
+        <div class="aging-title">Creditors Aging — Accounts Payable</div>
+        <div class="aging-sub">Pending/unapproved expenditures owed to suppliers and contractors, categorised by how long they have been outstanding.</div>
+
+        <div class="aging-toolbar">
+          <select id="creditorDept" onchange="loadCreditors()">
+            <option value="">All Departments</option>
+            <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
+            <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadCreditors()">↻ Refresh</button>
+          <span id="creditorCount" style="font-size:12px;color:var(--text2)"></span>
+        </div>
+
+        <!-- Bucket KPIs -->
+        <div class="bucket-grid" id="creditorBuckets">
+          <div class="bucket-card bc-current"><div class="b-label">Current</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-30"><div class="b-label">1–30 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-60"><div class="b-label">31–60 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-90"><div class="b-label">61–90 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-120"><div class="b-label">91–120 Days</div><div class="b-amount">—</div></div>
+          <div class="bucket-card bc-120plus"><div class="b-label">120+ Days</div><div class="b-amount">—</div></div>
+        </div>
+
+        <!-- Chart + Summary -->
+        <div class="grid-2" style="margin-bottom:20px">
+          <canvas id="creditorBar" height="180"></canvas>
+          <canvas id="creditorPie" height="180"></canvas>
+        </div>
+
+        <!-- Summary by Department -->
+        <div class="aging-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left;min-width:160px">Department</th>
+                <th>Items</th>
+                <th class="col-current">Current</th>
+                <th class="col-30">1–30 Days</th>
+                <th class="col-60">31–60 Days</th>
+                <th class="col-90">61–90 Days</th>
+                <th class="col-120">91–120 Days</th>
+                <th class="col-120plus">120+ Days</th>
+                <th class="col-total">Total</th>
+              </tr>
+            </thead>
+            <tbody id="creditorTbody">
+              <tr><td colspan="9" class="text-center text-muted" style="padding:32px">Click Refresh to load data</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Detail: individual expenditures -->
+        <div style="margin-top:16px">
+          <button class="btn btn-secondary btn-sm" onclick="toggleDetail()">▾ Show Individual Expenditures</button>
+        </div>
+        <div class="detail-panel" id="detailPanel">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase">Pending Expenditure Detail</div>
+          <div style="overflow-x:auto">
+            <table id="detailTable">
+              <thead><tr>
+                <th>Reference</th><th>Department</th><th>Description</th>
+                <th>Amount</th><th>Budget Line</th><th>Date</th><th>Days Outstanding</th><th>Bucket</th>
+              </tr></thead>
+              <tbody id="detailTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('aging');
+
+const BUCKET_KEYS   = ['current','days_1_30','days_31_60','days_61_90','days_91_120','days_120_plus'];
+const BUCKET_LABELS = ['Current','1–30 Days','31–60 Days','61–90 Days','91–120 Days','120+ Days'];
+const BUCKET_COLORS = [
+  'rgba(39,174,96,0.7)', 'rgba(59,125,216,0.7)', 'rgba(243,156,18,0.7)',
+  'rgba(230,126,34,0.7)', 'rgba(192,57,43,0.7)',  'rgba(142,68,173,0.7)'
+];
+const COL_CLS = ['col-current','col-30','col-60','col-90','col-120','col-120plus'];
+
+let debtorBarChart = null, debtorPieChart = null;
+let creditorBarChart = null, creditorPieChart = null;
+let allDebtorRows = [];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function $ (id) { return document.getElementById(id); }
+
+function fmtCell(v) {
+  if (!v || v === 0) return `<span class="zero-cell">—</span>`;
+  return fmtMoney(v);
+}
+
+function renderBuckets(containerId, totals) {
+  const cards = document.getElementById(containerId).querySelectorAll('.bucket-card');
+  BUCKET_KEYS.forEach((k, i) => {
+    const v = totals[k] || 0;
+    cards[i].querySelector('.b-amount').textContent = fmtMoney(v);
+    // Progress bar relative to total
+    const pct = totals.total > 0 ? Math.round(v / totals.total * 100) : 0;
+    let bar = cards[i].querySelector('.b-bar');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'b-bar'; cards[i].appendChild(bar); }
+    bar.style.width = pct + '%';
+    bar.style.background = BUCKET_COLORS[i].replace('0.7','1');
+  });
+}
+
+function buildBarChart(canvasId, labels, datasets) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom' } },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true,
+        ticks: { callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toLocaleString()) } } }
+    }
+  });
+}
+
+function buildPieChart(canvasId, labels, data) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: BUCKET_COLORS, borderWidth: 1 }] },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+}
+
+// ── DEBTORS ───────────────────────────────────────────────────────────────────
+async function loadDebtors() {
+  const zone = $('debtorZone').value;
+  try {
+    let url = '/api/aging/debtors?format=json';
+    if (zone) url += `&zone=${encodeURIComponent(zone)}`;
+    const data = await apiFetch(url);
+    allDebtorRows = data.rows;
+    renderDebtors(data);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderDebtors(data) {
+  const { rows, totals } = data;
+  $('debtorCount').textContent = `${rows.length} debtor(s)  |  Total: ${fmtMoney(totals.total)}`;
+
+  renderBuckets('debtorBuckets', totals);
+
+  // Bar chart — stacked by bucket per ratepayer (top 10 by total)
+  const top10 = [...rows].sort((a,b) => b.total - a.total).slice(0, 12);
+  if (debtorBarChart)  debtorBarChart.destroy();
+  if (debtorPieChart)  debtorPieChart.destroy();
+  debtorBarChart = buildBarChart('debtorBar',
+    top10.map(r => r.ratepayer_name.split(' ').slice(0,2).join(' ')),
+    BUCKET_KEYS.map((k, i) => ({
+      label: BUCKET_LABELS[i],
+      data: top10.map(r => r[k] || 0),
+      backgroundColor: BUCKET_COLORS[i]
+    }))
+  );
+  debtorPieChart = buildPieChart('debtorPie',
+    BUCKET_LABELS, BUCKET_KEYS.map(k => totals[k] || 0)
+  );
+
+  renderDebtorTable(rows, totals);
+}
+
+function filterDebtors() {
+  const q = $('debtorSearch').value.toLowerCase();
+  const filtered = q
+    ? allDebtorRows.filter(r => r.ratepayer_name.toLowerCase().includes(q) || r.account_number.toLowerCase().includes(q))
+    : allDebtorRows;
+  // Recalculate totals for filtered set
+  const totals = {};
+  BUCKET_KEYS.forEach(k => { totals[k] = Math.round(filtered.reduce((s,r)=>s+(r[k]||0),0)*100)/100; });
+  totals.total = Math.round(filtered.reduce((s,r)=>s+(r.total||0),0)*100)/100;
+  renderDebtorTable(filtered, totals);
+  $('debtorCount').textContent = `${filtered.length} debtor(s)  |  Total: ${fmtMoney(totals.total)}`;
+}
+
+function renderDebtorTable(rows, totals) {
+  $('debtorTbody').innerHTML = rows.length === 0
+    ? '<tr><td colspan="11" class="text-center text-muted" style="padding:24px">No outstanding debtors found</td></tr>'
+    : rows.map(r => `<tr>
+        <td><code style="font-size:11px;color:var(--primary-light)">${r.account_number}</code></td>
+        <td style="font-weight:500">
+          ${r.ratepayer_name}
+          <div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">
+            <a class="btn btn-sm btn-secondary" style="font-size:10px;padding:2px 7px"
+               href="${pageUrl('invoices.html',{ratepayer_id:r.ratepayer_id})}">Invoices</a>
+            <a class="btn btn-sm btn-secondary" style="font-size:10px;padding:2px 7px"
+               href="${pageUrl('payments.html',{ratepayer_id:r.ratepayer_id})}">Payments</a>
+            <a class="btn btn-sm btn-secondary" style="font-size:10px;padding:2px 7px"
+               href="${pageUrl('ratepayers.html',{search:r.account_number})}">Profile</a>
+          </div>
+        </td>
+        <td style="color:var(--text2)">${r.zone}</td>
+        <td style="text-align:right">${r.invoice_count}</td>
+        ${BUCKET_KEYS.map((k,i) => `<td class="${COL_CLS[i]}">${fmtCell(r[k])}</td>`).join('')}
+        <td class="col-total">${fmtMoney(r.total)}</td>
+      </tr>`).join('') +
+    `<tr class="total-row">
+      <td colspan="3">TOTAL</td>
+      <td style="text-align:right">${rows.reduce((s,r)=>s+r.invoice_count,0)}</td>
+      ${BUCKET_KEYS.map((k,i)=>`<td class="${COL_CLS[i]}">${fmtMoney(totals[k]||0)}</td>`).join('')}
+      <td class="col-total">${fmtMoney(totals.total)}</td>
+    </tr>`;
+}
+
+// ── CREDITORS ─────────────────────────────────────────────────────────────────
+async function loadCreditors() {
+  const dept = $('creditorDept').value;
+  try {
+    let url = '/api/aging/creditors?format=json';
+    if (dept) url += `&department=${encodeURIComponent(dept)}`;
+    const data = await apiFetch(url);
+    const { rows, totals, detail } = data;
+    $('creditorCount').textContent = `${rows.length} department(s)  |  Total: ${fmtMoney(totals.total)}`;
+
+    renderBuckets('creditorBuckets', totals);
+
+    if (creditorBarChart) creditorBarChart.destroy();
+    if (creditorPieChart)  creditorPieChart.destroy();
+    creditorBarChart = buildBarChart('creditorBar',
+      rows.map(r => r.department),
+      BUCKET_KEYS.map((k, i) => ({
+        label: BUCKET_LABELS[i], data: rows.map(r => r[k] || 0), backgroundColor: BUCKET_COLORS[i]
+      }))
+    );
+    creditorPieChart = buildPieChart('creditorPie', BUCKET_LABELS, BUCKET_KEYS.map(k => totals[k] || 0));
+
+    $('creditorTbody').innerHTML = rows.length === 0
+      ? '<tr><td colspan="9" class="text-center text-muted" style="padding:24px">No pending creditor items found</td></tr>'
+      : rows.map(r => `<tr>
+          <td style="font-weight:500">${r.department}</td>
+          <td style="text-align:right">${r.expenditure_count}</td>
+          ${BUCKET_KEYS.map((k,i)=>`<td class="${COL_CLS[i]}">${fmtCell(r[k])}</td>`).join('')}
+          <td class="col-total">${fmtMoney(r.total)}</td>
+        </tr>`).join('') +
+      `<tr class="total-row">
+        <td>TOTAL</td>
+        <td style="text-align:right">${rows.reduce((s,r)=>s+r.expenditure_count,0)}</td>
+        ${BUCKET_KEYS.map((k,i)=>`<td class="${COL_CLS[i]}">${fmtMoney(totals[k]||0)}</td>`).join('')}
+        <td class="col-total">${fmtMoney(totals.total)}</td>
+      </tr>`;
+
+    // Detail panel
+    const bucketLabel = { current:'Current', days_1_30:'1–30 Days', days_31_60:'31–60 Days',
+                          days_61_90:'61–90 Days', days_91_120:'91–120 Days', days_120_plus:'120+ Days' };
+    const bucketCls   = { current:'col-current', days_1_30:'col-30', days_31_60:'col-60',
+                          days_61_90:'col-90', days_91_120:'col-120', days_120_plus:'col-120plus' };
+    $('detailTbody').innerHTML = detail.length === 0
+      ? '<tr><td colspan="8" class="text-center text-muted">No pending items</td></tr>'
+      : detail.map(e => `<tr>
+          <td><code style="font-size:11px;color:var(--gold)">${e.reference_number}</code></td>
+          <td>${e.department}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${e.description}">${e.description}</td>
+          <td style="text-align:right;font-weight:600">${fmtMoney(e.amount)}</td>
+          <td style="font-size:11px">${e.budget_line}</td>
+          <td style="font-size:11px;color:var(--text2)">${e.expenditure_date}</td>
+          <td style="text-align:right;color:${e.days_outstanding>90?'var(--danger)':e.days_outstanding>30?'var(--warning)':'var(--text2)'}">${e.days_outstanding}</td>
+          <td><span class="badge badge-info" style="font-size:10px">${bucketLabel[e.bucket]||e.bucket}</span></td>
+        </tr>`).join('');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+let detailOpen = false;
+function toggleDetail() {
+  detailOpen = !detailOpen;
+  $('detailPanel').classList.toggle('open', detailOpen);
+  event.target.textContent = detailOpen ? '▴ Hide Individual Expenditures' : '▾ Show Individual Expenditures';
+}
+
+// ── Apply URL context ─────────────────────────────────────────────────────────
+(function() {
+  const p = getUrlParams();
+  if (p.account) {
+    document.getElementById('debtorSearch').value = p.account;
+  }
+  if (p.zone) {
+    document.getElementById('debtorZone').value = p.zone;
+  }
+  if (p.department) {
+    document.getElementById('creditorDept').value = p.department;
+    // scroll to creditors section
+    setTimeout(() => {
+      document.querySelector('.section-divider').scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 800);
+  }
+})();
+
+// Auto-load on page open
+loadDebtors();
+loadCreditors();
+</script>
+</body>
+</html>

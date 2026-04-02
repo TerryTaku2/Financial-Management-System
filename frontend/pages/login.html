@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — City of Harare FMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1117;--bg2:#161b26;--bg3:#1e2535;--border:#2a3347;--text:#e8eaf0;--text2:#8892a4;--text3:#5a6478;--primary:#3b7dd8;--primary-light:#5b9df8;--gold:#c9a84c;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.bg-pattern{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(59,125,216,0.07) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(201,168,76,0.05) 0%,transparent 50%);pointer-events:none;}
+.login-wrap{width:100%;max-width:420px;padding:20px;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:40px;box-shadow:0 24px 60px rgba(0,0,0,0.5);}
+.login-header{text-align:center;margin-bottom:32px;}
+.crest{width:64px;height:64px;background:linear-gradient(135deg,var(--primary),#5b9df8);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 16px;}
+.login-title{font-family:'Crimson Pro',serif;font-size:26px;font-weight:700;margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--text2);line-height:1.5;}
+.form-group{margin-bottom:18px;}
+label{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:7px;text-transform:uppercase;letter-spacing:0.05em;}
+input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .15s;}
+input:focus{border-color:var(--primary);}
+.btn-login{width:100%;padding:12px;background:var(--primary);color:white;border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14.5px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:4px;}
+.btn-login:hover{background:var(--primary-light);}
+.btn-login:disabled{opacity:0.6;cursor:not-allowed;}
+.error-msg{background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#e74c3c;margin-bottom:16px;display:none;}
+.demo-creds{margin-top:24px;padding-top:20px;border-top:1px solid var(--border);}
+.demo-title{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:10px;text-align:center;}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.demo-chip{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;transition:border-color .15s;}
+.demo-chip:hover{border-color:var(--primary);}
+.demo-chip .role{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;}
+.demo-chip .cred{font-size:12px;font-weight:500;}
+.footer-note{text-align:center;font-size:11.5px;color:var(--text3);margin-top:20px;}
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="crest">🏛️</div>
+      <div class="login-title">City of Harare</div>
+      <div class="login-sub">Financial Management System<br>Revenue Leakage Mitigation Platform</div>
+    </div>
+    <div class="error-msg" id="errMsg"></div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="Enter your username" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign In</button>
+
+    <div class="demo-creds">
+      <div class="demo-title">Demo Credentials</div>
+      <div class="demo-grid">
+        <div class="demo-chip" onclick="fillCreds('admin','admin123')">
+          <div class="role">Admin</div>
+          <div class="cred">admin / admin123</div>
+        </div>
+        <div class="demo-chip" onclick="fillCreds('r.officer1','password123')">
+          <div class="role">Revenue Officer</div>
+          <div class="cred">r.officer1</div>
+        </div>
+        <div class="demo-chip" onclick="fillCreds('auditor1','password123')">
+          <div class="role">Auditor</div>
+          <div class="cred">auditor1</div>
+        </div>
+        <div class="demo-chip" onclick="fillCreds('budget1','password123')">
+          <div class="role">Budget Officer</div>
+          <div class="cred">budget1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer-note">City of Harare © 2026 · Dissertation Research System</div>
+</div>
+<script>
+const API = 'http://localhost:8000';
+function fillCreds(u,p){document.getElementById('username').value=u;document.getElementById('password').value=p;}
+document.getElementById('password').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+async function doLogin(){
+  const u=document.getElementById('username').value.trim();
+  const p=document.getElementById('password').value;
+  const btn=document.getElementById('loginBtn');
+  const err=document.getElementById('errMsg');
+  err.style.display='none';
+  if(!u||!p){err.textContent='Please enter username and password.';err.style.display='block';return;}
+  btn.disabled=true; btn.textContent='Signing in...';
+  try{
+    const form=new FormData();form.append('username',u);form.append('password',p);
+    const res=await fetch(API+'/api/auth/login',{method:'POST',body:form});
+    const data=await res.json();
+    if(!res.ok){err.textContent=data.detail||'Invalid credentials';err.style.display='block';return;}
+    localStorage.setItem('fms_token',data.access_token);
+    localStorage.setItem('fms_user',JSON.stringify(data.user));
+    window.location.href='/static/pages/dashboard.html';
+  }catch(e){err.textContent='Cannot connect to server. Ensure the backend is running.';err.style.display='block';}
+  finally{btn.disabled=false;btn.textContent='Sign In';}
+}
+</script>
+</body>
+</html>

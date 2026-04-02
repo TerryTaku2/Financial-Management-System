@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leakage Monitor — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">🔍 Revenue Leakage Monitor</span>
+    </div>
+    <div class="page-content">
+
+      <!-- KPIs -->
+      <div class="stats-grid" id="leakageStats">
+        <div class="stat-card red"><div class="stat-icon">🚨</div><div class="stat-value" id="lkHigh">—</div><div class="stat-label">High Anomaly Invoices</div></div>
+        <div class="stat-card yellow"><div class="stat-icon">⚠️</div><div class="stat-value" id="lkMedium">—</div><div class="stat-label">Medium Anomalies</div></div>
+        <div class="stat-card blue"><div class="stat-icon">🔔</div><div class="stat-value" id="lkAlerts">—</div><div class="stat-label">Active Alerts</div></div>
+        <div class="stat-card red"><div class="stat-icon">💸</div><div class="stat-value" id="lkEstimate">—</div><div class="stat-label">Estimated Leakage</div></div>
+        <div class="stat-card yellow"><div class="stat-icon">🔄</div><div class="stat-value" id="lkUnrecon">—</div><div class="stat-label">Unreconciled Payments</div></div>
+        <div class="stat-card red"><div class="stat-icon">📉</div><div class="stat-value" id="lkOverdue">—</div><div class="stat-label">Overdue Balance</div></div>
+      </div>
+
+      <!-- Leakage Explanation Panel -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">📌 What is Revenue Leakage?</span>
+        </div>
+        <p style="color:var(--text2);font-size:13.5px;line-height:1.8">
+          Revenue leakage in the City of Harare occurs when billable income fails to reach the municipal treasury due to manual collection gaps, unreconciled payments, fraudulent waivers, duplicate billing, and ghost ratepayers. This system detects leakage through <strong style="color:var(--text)">anomaly detection algorithms</strong>, reconciliation tracking, and real-time alert monitoring — enabling officers to act before losses become permanent.
+        </p>
+      </div>
+
+      <div class="grid-2 mb-4">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Anomaly Distribution</span></div>
+          <canvas id="anomalyChart" height="200"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Leakage Breakdown</span></div>
+          <canvas id="leakagePieChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Active Alerts Table -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🚨 Active Leakage Alerts</span>
+          <span id="alertCount" style="font-size:12px;color:var(--text2)"></span>
+        </div>
+        <div id="alertsList"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('leakage');
+
+async function loadLeakage() {
+  try {
+    const [summary, alerts] = await Promise.all([
+      apiFetch('/api/leakage/summary'),
+      apiFetch('/api/leakage/alerts'),
+    ]);
+
+    document.getElementById('lkHigh').textContent = summary.high_anomalies;
+    document.getElementById('lkMedium').textContent = summary.medium_anomalies;
+    document.getElementById('lkAlerts').textContent = summary.active_alerts;
+    document.getElementById('lkEstimate').textContent = fmtMoney(summary.estimated_leakage);
+    document.getElementById('lkUnrecon').textContent = summary.unreconciled_payments;
+    document.getElementById('lkOverdue').textContent = fmtMoney(summary.overdue_balance);
+
+    // Anomaly bar chart
+    new Chart(document.getElementById('anomalyChart'), {
+      type: 'bar',
+      data: {
+        labels: ['High', 'Medium', 'Low'],
+        datasets: [{
+          label: 'Flagged Invoices',
+          data: [summary.high_anomalies, summary.medium_anomalies, summary.low_anomalies],
+          backgroundColor: ['rgba(231,76,60,0.7)','rgba(243,156,18,0.7)','rgba(201,168,76,0.7)'],
+          borderColor: ['#e74c3c','#f39c12','#c9a84c'],
+          borderWidth: 1,
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+    });
+
+    // Leakage pie chart
+    new Chart(document.getElementById('leakagePieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Unreconciled Payments','Overdue Balance','Other Leakage'],
+        datasets: [{
+          data: [
+            summary.unreconciled_amount,
+            summary.overdue_balance,
+            summary.estimated_leakage * 0.2
+          ],
+          backgroundColor: ['rgba(231,76,60,0.7)','rgba(243,156,18,0.7)','rgba(59,125,216,0.7)'],
+          borderColor: ['#e74c3c','#f39c12','#3b7dd8'],
+          borderWidth: 1,
+        }]
+      },
+      options: { responsive:true, plugins:{ legend:{ position:'bottom' } } }
+    });
+
+    // Alerts list
+    const active = alerts.filter(a => !a.is_resolved);
+    const resolved = alerts.filter(a => a.is_resolved);
+    document.getElementById('alertCount').textContent = `${active.length} active · ${resolved.length} resolved`;
+
+    if (alerts.length === 0) {
+      document.getElementById('alertsList').innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No alerts — system is clean</p></div>';
+      return;
+    }
+
+    document.getElementById('alertsList').innerHTML = alerts.map(a => `
+      <div class="alert-item ${a.is_resolved ? '' : a.severity}" style="${a.is_resolved ? 'opacity:0.5;background:var(--bg3)' : ''}">
+        <div class="alert-dot"></div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <span class="alert-type">${a.type}</span>
+            <span class="badge badge-${a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'low'}">${a.severity}</span>
+            ${a.is_resolved ? '<span class="badge badge-paid">Resolved</span>' : ''}
+          </div>
+          <div class="alert-desc">${a.description}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">${a.created_at}</div>
+        </div>
+        ${!a.is_resolved ? `<button class="btn btn-sm btn-secondary" onclick="resolveAlert(${a.id})">Resolve</button>` : ''}
+      </div>`).join('');
+
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function resolveAlert(id) {
+  try {
+    await apiPatch(`/api/leakage/alerts/${id}/resolve`);
+    toast('Alert marked as resolved', 'success');
+    loadLeakage();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+loadLeakage();
+</script>
+</body>
+</html>
