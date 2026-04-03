@@ -174,7 +174,39 @@ function buildSidebar(activePage) {
           </div>
           <button class="logout-btn" onclick="logout()" title="Logout">⏏</button>
         </div>
+        <button class="change-pwd-btn" onclick="openModal('changePwdModal')" title="Change Password">🔑 Change Password</button>
       </div>`;
+    // Inject the change-password modal once into the page
+    if (!document.getElementById('changePwdModal')) {
+      const modalHtml = `
+        <div class="modal-overlay" id="changePwdModal">
+          <div class="modal" style="max-width:400px">
+            <div class="modal-header">
+              <span class="modal-title">Change Password</span>
+              <button class="modal-close" onclick="closeModal('changePwdModal')">✕</button>
+            </div>
+            <div class="modal-body">
+              <div class="form-group">
+                <label class="form-label">Current Password</label>
+                <input class="form-input" type="password" id="cpCurrent" placeholder="Enter current password">
+              </div>
+              <div class="form-group">
+                <label class="form-label">New Password</label>
+                <input class="form-input" type="password" id="cpNew" placeholder="At least 8 characters">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Confirm New Password</label>
+                <input class="form-input" type="password" id="cpConfirm" placeholder="Repeat new password">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="closeModal('changePwdModal')">Cancel</button>
+              <button class="btn btn-primary" onclick="submitChangePassword()">Update Password</button>
+            </div>
+          </div>
+        </div>`;
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
   }
 }
 
@@ -222,3 +254,48 @@ function renderPagination(containerId, total, limit, currentPage, onPage) {
   html += `<button class="page-btn" onclick="(${onPage})(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>›</button>`;
   el.innerHTML = html;
 }
+
+// ── Change Password ───────────────────────────────────────────────────────────
+async function submitChangePassword() {
+  const current = document.getElementById('cpCurrent').value.trim();
+  const newPwd  = document.getElementById('cpNew').value.trim();
+  const confirm = document.getElementById('cpConfirm').value.trim();
+  if (!current || !newPwd || !confirm) { toast('All fields are required', 'warning'); return; }
+  if (newPwd.length < 8) { toast('New password must be at least 8 characters', 'warning'); return; }
+  if (newPwd !== confirm) { toast('New passwords do not match', 'error'); return; }
+  try {
+    await apiPatch('/api/auth/change-password', { current_password: current, new_password: newPwd });
+    toast('Password changed successfully', 'success');
+    closeModal('changePwdModal');
+    document.getElementById('cpCurrent').value = '';
+    document.getElementById('cpNew').value = '';
+    document.getElementById('cpConfirm').value = '';
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Session Timeout ───────────────────────────────────────────────────────────
+// Decode JWT expiry and redirect to login before the token expires, giving
+// the user a 60-second warning rather than a silent API failure.
+(function initSessionTimeout() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expiresAt = payload.exp * 1000; // convert seconds → ms
+    const now = Date.now();
+    const msLeft = expiresAt - now;
+    if (msLeft <= 0) { logout(); return; }
+    // Warn 60 seconds before expiry
+    const warnAt = msLeft - 60000;
+    if (warnAt > 0) {
+      setTimeout(() => {
+        toast('Your session will expire in 60 seconds. Save your work and log in again.', 'warning');
+      }, warnAt);
+    }
+    // Auto-logout at expiry
+    setTimeout(() => {
+      toast('Session expired. Redirecting to login...', 'error');
+      setTimeout(logout, 2000);
+    }, msLeft);
+  } catch(e) { /* malformed token — will fail on next API call */ }
+})();

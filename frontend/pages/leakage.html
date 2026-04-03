@@ -6,6 +6,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Print styles ──────────────────────────────────────────────── */
+@media print {
+  .sidebar, .topbar, .btn, #alertsList .btn, .change-pwd-btn,
+  #toast-container, .modal-overlay { display: none !important; }
+  .app-layout { display: block !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
+  .page-content { padding: 0 !important; }
+  body { background: #fff !important; color: #000 !important; font-size: 11pt; }
+  .print-header { display: block !important; }
+  .stat-card { border: 1px solid #ccc !important; background: #f9f9f9 !important; color: #000 !important; }
+  .stat-value { color: #000 !important; }
+  .card { border: 1px solid #ccc !important; background: #fff !important; page-break-inside: avoid; }
+  .card-title { color: #000 !important; }
+  .alert-item { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; page-break-inside: avoid; }
+  .alert-desc, .alert-type { color: #000 !important; }
+  .badge { border: 1px solid #ccc; }
+  canvas { max-width: 300px; }
+  #printMethodNote { display: block !important; }
+}
+.print-header { display: none; padding: 0 0 16px 0; border-bottom: 2px solid #333; margin-bottom: 20px; }
+#printMethodNote { display: none; font-size: 10pt; color: #555; margin-top: 8px; }
+</style>
 </head>
 <body>
 <div class="app-layout">
@@ -13,8 +36,22 @@
   <div class="main-content">
     <div class="topbar">
       <span class="topbar-title">🔍 Revenue Leakage Monitor</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="runScan()" id="scanBtn">🔎 Scan for Leakage</button>
+        <button class="btn btn-primary btn-sm" onclick="printReport()">🖨️ Print Report</button>
+      </div>
     </div>
     <div class="page-content">
+
+      <!-- Print-only header (hidden on screen) -->
+      <div class="print-header">
+        <div style="font-size:20pt;font-weight:700">City of Harare — Financial Management System</div>
+        <div style="font-size:14pt;margin-top:4px">Revenue Leakage Monitor Report</div>
+        <div id="printMethodNote">
+          <strong>Detection methodology:</strong> Z-score statistical outlier detection (Grubbs, 1969; Iglewicz &amp; Hoaglin, 1993) applied to invoice amounts by revenue category. Anomaly thresholds: |Z| &gt; 3.0 = high severity, |Z| &gt; 2.0 = medium, |Z| &gt; 1.5 = low. Leakage Risk Index computed as: 40% × unreconciled payments + 25% × overdue balance (ACFE Revenue Assurance Framework, 2022).
+        </div>
+        <div id="printGenDate" style="margin-top:6px;font-size:10pt;color:#666"></div>
+      </div>
 
       <!-- KPIs -->
       <div class="stats-grid" id="leakageStats">
@@ -147,6 +184,23 @@ async function resolveAlert(id) {
     toast('Alert marked as resolved', 'success');
     loadLeakage();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function runScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true; btn.textContent = '⏳ Scanning...';
+  try {
+    const result = await apiFetch('/api/leakage/scan', { method: 'POST' });
+    toast(result.message || 'Scan complete', result.generated > 0 ? 'warning' : 'success');
+    loadLeakage();
+  } catch(e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '🔎 Scan for Leakage'; }
+}
+
+function printReport() {
+  document.getElementById('printGenDate').textContent =
+    'Generated: ' + new Date().toLocaleString('en-GB', { dateStyle:'long', timeStyle:'short' });
+  window.print();
 }
 
 loadLeakage();

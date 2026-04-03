@@ -1,5 +1,5 @@
-import sys
-sys.path.insert(0, '/home/claude/fms/backend')
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from fastapi.testclient import TestClient
 import main
 
@@ -80,6 +80,21 @@ print('')
 print(f'=== BUDGETS ({len(bgt)} departments) ===')
 for b in bgt[:3]:
     print(f'  {b["department"]}: Allocated ${b["allocated"]:,.0f} | Spent ${b["spent"]:,.0f} | {b["utilisation"]}% used')
+
+# Dynamic leakage scan
+scan = client.post('/api/leakage/scan', headers=headers).json()
+print('')
+print('=== LEAKAGE SCAN ===')
+print(f'  Alerts Generated: {scan.get("generated", 0)}')
+print(f'  Message: {scan.get("message")}')
+
+# Password change (self-service)
+pwd_change = client.patch('/api/auth/change-password', json={
+    'current_password': 'admin123', 'new_password': 'admin123'
+}, headers=headers).json()
+print('')
+print('=== PASSWORD CHANGE ===')
+print(f'  Result: {pwd_change.get("message")}')
 
 print('')
 print('ALL ENDPOINTS OPERATIONAL')

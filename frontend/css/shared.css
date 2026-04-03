@@ -136,6 +136,14 @@ body {
   transition: color 0.15s;
 }
 .logout-btn:hover { color: var(--danger); }
+.change-pwd-btn {
+  display: block; width: 100%; margin-top: 8px;
+  background: none; border: 1px solid var(--border);
+  color: var(--text3); font-size: 11px; padding: 5px 8px;
+  border-radius: 6px; cursor: pointer; text-align: left;
+  transition: color 0.15s, border-color 0.15s;
+}
+.change-pwd-btn:hover { color: var(--primary-light); border-color: var(--primary); }
 
 /* ── Main Content ── */
 .main-content {

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(pip install:*)",
       "Bash(python database.py)",
-      "Bash(python seed.py)"
+      "Bash(python seed.py)",
+      "Bash(python -c ':*)",
+      "Bash(python -c:*)"
     ]
   }
 }
