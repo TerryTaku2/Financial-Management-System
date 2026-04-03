@@ -79,7 +79,9 @@ input:focus{border-color:var(--primary);}
   <div class="footer-note">City of Harare © 2026 · Dissertation Research System</div>
 </div>
 <script>
-const API = 'http://localhost:8000';
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : window.location.origin;
 function fillCreds(u,p){document.getElementById('username').value=u;document.getElementById('password').value=p;}
 document.getElementById('password').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 async function doLogin(){

@@ -2,5 +2,5 @@ services:
   - type: web
     name: harare-fms
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd backend && python database.py && python seed.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt && cd backend && python database.py && python seed.py
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
