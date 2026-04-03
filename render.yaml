@@ -3,8 +3,8 @@ services:
     name: harare-fms
     runtime: python
     rootDir: backend
-    buildCommand: pip install fastapi uvicorn sqlalchemy python-jose python-multipart bcrypt openpyxl
+    buildCommand: pip install -r requirements.txt
     startCommand: python database.py && python seed.py && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.13.0
+        value: 3.12.7
