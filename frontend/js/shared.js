@@ -132,17 +132,17 @@ function buildSidebar(activePage) {
   const user = getUser();
   const role = user?.role || '';
   const navItems = [
-    { label: 'Dashboard',        icon: '📊', page: 'dashboard',    href: 'dashboard.html',    roles: [] },
-    { label: 'Ratepayers',       icon: '👤', page: 'ratepayers',   href: 'ratepayers.html',   roles: [] },
-    { label: 'Invoices',         icon: '🧾', page: 'invoices',     href: 'invoices.html',     roles: [] },
-    { label: 'Payments',         icon: '💳', page: 'payments',     href: 'payments.html',     roles: [] },
-    { label: 'Expenditure',      icon: '💸', page: 'expenditures', href: 'expenditures.html', roles: [] },
-    { label: 'Budget',           icon: '📁', page: 'budget',       href: 'budget.html',       roles: [] },
-    { label: 'Leakage Monitor',  icon: '🔍', page: 'leakage',      href: 'leakage.html',      roles: [] },
-    { label: 'Audit Trail',      icon: '📋', page: 'audit',        href: 'audit.html',        roles: ['admin','auditor'] },
-    { label: 'Reports',          icon: '📈', page: 'reports',      href: 'reports.html',      roles: ['admin','auditor','accountant','budget_officer'] },
-    { label: 'Aging Analysis',   icon: '⏳', page: 'aging',        href: 'aging.html',        roles: [] },
-    { label: 'User Management',  icon: '👥', page: 'users',        href: 'users.html',        roles: ['admin'] },
+    { label: 'Dashboard',        icon: '▪', page: 'dashboard',    href: 'dashboard.html',    roles: [] },
+    { label: 'Ratepayers',       icon: '▪', page: 'ratepayers',   href: 'ratepayers.html',   roles: [] },
+    { label: 'Invoices',         icon: '▪', page: 'invoices',     href: 'invoices.html',     roles: [] },
+    { label: 'Payments',         icon: '▪', page: 'payments',     href: 'payments.html',     roles: [] },
+    { label: 'Expenditure',      icon: '▪', page: 'expenditures', href: 'expenditures.html', roles: [] },
+    { label: 'Budget',           icon: '▪', page: 'budget',       href: 'budget.html',       roles: [] },
+    { label: 'Leakage Monitor',  icon: '▪', page: 'leakage',      href: 'leakage.html',      roles: [] },
+    { label: 'Audit Trail',      icon: '▪', page: 'audit',        href: 'audit.html',        roles: ['admin','auditor'] },
+    { label: 'Reports',          icon: '▪', page: 'reports',      href: 'reports.html',      roles: ['admin','auditor','accountant','budget_officer'] },
+    { label: 'Aging Analysis',   icon: '▪', page: 'aging',        href: 'aging.html',        roles: [] },
+    { label: 'User Management',  icon: '▪', page: 'users',        href: 'users.html',        roles: ['admin'] },
   ];
 
   const allowed = navItems.filter(n => n.roles.length === 0 || n.roles.includes(role));
@@ -161,7 +161,7 @@ function buildSidebar(activePage) {
     sidebar.innerHTML = `
       <div class="sidebar-logo">
         <div class="logo-badge">
-          <div class="logo-icon">🏛️</div>
+          <img src="/static/images/crest.png" alt="City of Harare Crest" style="width:44px;height:44px;object-fit:contain;">
           <div>
             <div class="logo-text">City of Harare</div>
             <div class="logo-sub">FMS v1.0</div>
@@ -178,7 +178,7 @@ function buildSidebar(activePage) {
           </div>
           <button class="logout-btn" onclick="logout()" title="Logout">⏏</button>
         </div>
-        <button class="change-pwd-btn" onclick="openModal('changePwdModal')" title="Change Password">🔑 Change Password</button>
+        <button class="change-pwd-btn" onclick="openModal('changePwdModal')" title="Change Password">Change Password</button>
       </div>`;
     // Inject the change-password modal once into the page
     if (!document.getElementById('changePwdModal')) {
