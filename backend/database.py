@@ -1,7 +1,11 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Enum
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
+
+def utcnow():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 import enum
 
 DATABASE_URL = "sqlite:///./fms_harare.db"
@@ -59,7 +63,7 @@ class User(Base):
     hashed_password = Column(String)
     role = Column(Enum(UserRole), default=UserRole.revenue_officer)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     last_login = Column(DateTime, nullable=True)
 
 class Ratepayer(Base):
@@ -74,7 +78,7 @@ class Ratepayer(Base):
     email = Column(String, nullable=True)
     property_type = Column(String, default="residential")
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     invoices = relationship("Invoice", back_populates="ratepayer")
     payments = relationship("Payment", back_populates="ratepayer")
 
@@ -87,7 +91,7 @@ class Invoice(Base):
     amount = Column(Float)
     amount_paid = Column(Float, default=0.0)
     balance = Column(Float)
-    issue_date = Column(DateTime, default=datetime.utcnow)
+    issue_date = Column(DateTime, default=utcnow)
     due_date = Column(DateTime)
     status = Column(Enum(PaymentStatus), default=PaymentStatus.pending)
     anomaly_flag = Column(Enum(AnomalyFlag), default=AnomalyFlag.none)
@@ -105,7 +109,7 @@ class Payment(Base):
     amount = Column(Float)
     payment_method = Column(String, default="cash")
     currency = Column(String, default="USD")
-    payment_date = Column(DateTime, default=datetime.utcnow)
+    payment_date = Column(DateTime, default=utcnow)
     collected_by = Column(Integer, ForeignKey("users.id"))
     is_reconciled = Column(Boolean, default=False)
     anomaly_flag = Column(Enum(AnomalyFlag), default=AnomalyFlag.none)
@@ -121,7 +125,7 @@ class Expenditure(Base):
     description = Column(Text)
     amount = Column(Float)
     budget_line = Column(String)
-    expenditure_date = Column(DateTime, default=datetime.utcnow)
+    expenditure_date = Column(DateTime, default=utcnow)
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_approved = Column(Boolean, default=False)
     anomaly_flag = Column(Enum(AnomalyFlag), default=AnomalyFlag.none)
@@ -135,7 +139,7 @@ class Budget(Base):
     allocated_amount = Column(Float)
     spent_amount = Column(Float, default=0.0)
     remaining = Column(Float)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -147,7 +151,7 @@ class AuditLog(Base):
     old_value = Column(Text, nullable=True)
     new_value = Column(Text, nullable=True)
     ip_address = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=utcnow)
     description = Column(Text, nullable=True)
 
 class LeakageAlert(Base):
@@ -160,7 +164,7 @@ class LeakageAlert(Base):
     related_table = Column(String, nullable=True)
     is_resolved = Column(Boolean, default=False)
     resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     resolved_at = Column(DateTime, nullable=True)
 
 class RevenueTarget(Base):
@@ -172,7 +176,7 @@ class RevenueTarget(Base):
     target_amount = Column(Float)      # planned revenue for the period
     period = Column(String, default="annual")  # annual, Q1, Q2, Q3, Q4, or YYYY-MM
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 Base.metadata.create_all(bind=engine)

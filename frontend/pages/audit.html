@@ -10,7 +10,13 @@
 <div class="app-layout">
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
-    <div class="topbar"><span class="topbar-title">Audit Trail</span></div>
+    <div class="topbar">
+      <span class="topbar-title">Audit Trail</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=csv','audit_trail.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=xlsx','audit_trail.xlsx')">⬇ Excel</button>
+      </div>
+    </div>
     <div class="page-content">
       <div class="card">
         <div class="card-header">

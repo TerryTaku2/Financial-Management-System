@@ -1,6 +1,6 @@
 #!/bin/bash
-set -e
+# City of Harare FMS — Linux/Mac Start Script
 cd backend
-python database.py
+pip install -r requirements.txt --quiet
 python seed.py
-exec uvicorn main:app --host 0.0.0.0 --port "${PORT:-8000}"
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload

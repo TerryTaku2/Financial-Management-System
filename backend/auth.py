@@ -1,4 +1,5 @@
 import bcrypt
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -7,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db, User
 
-SECRET_KEY = "fms-harare-secret-key-2026-dissertation"
+SECRET_KEY = os.environ.get("FMS_SECRET_KEY", "fms-harare-secret-key-2026-dissertation")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 8
 

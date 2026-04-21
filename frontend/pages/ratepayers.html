@@ -143,6 +143,7 @@ async function loadRatepayers(page = 1) {
         <td style="white-space:nowrap">
           <button class="btn btn-sm btn-secondary" onclick="viewRatepayer(${r.id})">View</button>
           <button class="btn btn-sm btn-secondary" onclick="openEditModal(${r.id},'${escHtml(r.full_name)}','${escHtml(r.address)}','${r.ward}','${r.zone}','${r.phone||''}','${r.email||''}','${r.property_type}')">Edit</button>
+           <button class="btn btn-sm" style="background:rgba(59,125,216,.15);color:var(--primary-light);border:1px solid rgba(59,125,216,.3);font-size:11.5px;padding:3px 8px;border-radius:6px;cursor:pointer" onclick="viewStatement(${r.id},'${escHtml(r.full_name)}')">📄 Statement</button>
           <a class="btn btn-sm btn-secondary" href="${pageUrl('invoices.html',{ratepayer_id:r.id})}">Invoices</a>
           <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{account:r.account_number})}">Aging</a>
           <button class="btn btn-sm btn-danger" onclick="deleteRatepayer(${r.id},'${escHtml(r.full_name)}')">Delete</button>
@@ -197,6 +198,51 @@ function openAddModal() {
   document.getElementById('f_zone').value = 'Avondale';
   document.getElementById('f_proptype').value = 'residential';
   openModal('addModal');
+}
+
+function viewStatement(id, name) {
+  navigateTo('reconciliation.html', {});
+  // Open statement in new window for printing
+  const win = window.open('', '_blank');
+  const token = localStorage.getItem('fms_token');
+  fetch(`/api/ratepayers/${id}/statement`, {headers:{'Authorization':'Bearer '+token}})
+    .then(r=>r.json()).then(data => {
+      const rp = data.ratepayer; const s = data.summary;
+      const inv = data.invoices; const pmts = data.payments;
+      const fmt = v=>'$'+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      win.document.write(`<!DOCTYPE html><html><head><title>Statement - ${rp.full_name}</title>
+        <style>body{font-family:Arial,sans-serif;font-size:12pt;color:#000;margin:24px}
+        h1{font-size:18pt;color:#1F3864}h2{font-size:13pt;border-bottom:1px solid #ccc;padding-bottom:4px}
+        table{width:100%;border-collapse:collapse;margin:12px 0}
+        th{background:#1F3864;color:#fff;padding:6px 10px;font-size:10pt;text-align:left}
+        td{padding:5px 10px;border-bottom:1px solid #eee;font-size:10pt}
+        .total{font-weight:700;background:#f5f5f5}.header-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+        .kpi{background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:10px;text-align:center}
+        .kpi .v{font-size:16pt;font-weight:700;color:#1F3864}.kpi .l{font-size:9pt;color:#666}
+        @media print{button{display:none}}</style></head><body>
+        <img src="/static/images/crest.png" style="height:50px;margin-bottom:8px"><br>
+        <h1>City of Harare — Account Statement</h1>
+        <p><strong>Account:</strong> ${rp.account_number} | <strong>Name:</strong> ${rp.full_name}</p>
+        <p><strong>Address:</strong> ${rp.address}, ${rp.ward}, ${rp.zone} | <strong>Phone:</strong> ${rp.phone||'N/A'}</p>
+        <p><strong>Statement Date:</strong> ${data.generated_at} | <strong>Prepared by:</strong> ${data.generated_by}</p>
+        <div class="header-grid">
+          <div class="kpi"><div class="v">${fmt(s.total_billed)}</div><div class="l">Total Billed</div></div>
+          <div class="kpi"><div class="v">${fmt(s.total_paid)}</div><div class="l">Total Paid</div></div>
+          <div class="kpi" style="border-color:#c0392b"><div class="v" style="color:#c0392b">${fmt(s.total_outstanding)}</div><div class="l">Balance Outstanding</div></div>
+          <div class="kpi" style="border-color:#c0392b"><div class="v" style="color:#c0392b">${fmt(s.overdue_balance)}</div><div class="l">Overdue Balance</div></div>
+        </div>
+        <h2>Invoice History (${inv.length} invoices)</h2>
+        <table><thead><tr><th>Invoice #</th><th>Category</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Issue Date</th><th>Due Date</th></tr></thead>
+        <tbody>${inv.map(i=>`<tr><td>${i.invoice_number}</td><td>${i.category}</td><td>${fmt(i.amount)}</td><td>${fmt(i.amount_paid)}</td><td>${fmt(i.balance)}</td><td>${i.status.toUpperCase()}</td><td>${i.issue_date}</td><td>${i.due_date}</td></tr>`).join('')}
+        <tr class="total"><td colspan="2">TOTAL</td><td>${fmt(s.total_billed)}</td><td>${fmt(s.total_paid)}</td><td>${fmt(s.total_outstanding)}</td><td></td><td></td><td></td></tr></tbody></table>
+        <h2>Payment History (${pmts.length} payments)</h2>
+        <table><thead><tr><th>Receipt #</th><th>Amount</th><th>Method</th><th>Currency</th><th>Date</th><th>Reconciled</th></tr></thead>
+        <tbody>${pmts.map(p=>`<tr><td>${p.receipt_number}</td><td>${fmt(p.amount)}</td><td>${p.method}</td><td>${p.currency}</td><td>${p.date}</td><td>${p.reconciled?'Yes':'No'}</td></tr>`).join('')}</tbody></table>
+        <p style="margin-top:24px;font-size:9pt;color:#666">This is an official statement from the City of Harare Finance Department. For queries contact finance@harare.gov.zw or call +263-242-750171.</p>
+        <button onclick="window.print()" style="padding:8px 16px;background:#1F3864;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:12px">Print Statement</button>
+        </body></html>`);
+      win.document.close();
+    });
 }
 
 function openEditModal(id, name, address, ward, zone, phone, email, proptype) {

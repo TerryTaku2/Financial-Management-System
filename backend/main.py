@@ -1609,3 +1609,507 @@ def report_performance(fiscal_year: Optional[str] = None,
 @app.get("/")
 def root():
     return FileResponse(os.path.join(frontend_path, "pages", "login.html"))
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+
+@app.get("/api/health")
+def health_check(db: Session = Depends(get_db)):
+    """System health endpoint — verifies API and database are operational."""
+    try:
+        user_count = db.query(User).count()
+        return {
+            "status": "healthy",
+            "system": "City of Harare Financial Management System",
+            "version": "2.0.0",
+            "timestamp": str(now()),
+            "database": "connected",
+            "users": user_count
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Database error: {str(e)}")
+
+# ─── Bulk Reconciliation ───────────────────────────────────────────────────────
+
+@app.post("/api/payments/reconcile-all")
+def bulk_reconcile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant, UserRole.auditor))
+):
+    """Reconcile all unreconciled payments in a single operation with full audit trail."""
+    unreconciled = db.query(Payment).filter(Payment.is_reconciled == False).all()
+    count = 0
+    for pmt in unreconciled:
+        pmt.is_reconciled = True
+        db.add(AuditLog(
+            user_id=current_user.id, action="UPDATE", table_name="payments",
+            record_id=pmt.id,
+            description=f"Bulk reconciliation: {pmt.receipt_number} (${pmt.amount:.2f}) reconciled by {current_user.full_name}"
+        ))
+        count += 1
+    db.commit()
+    return {"reconciled": count, "message": f"{count} payment(s) reconciled successfully"}
+
+# ─── Collection Rate Trend ─────────────────────────────────────────────────────
+
+@app.get("/api/reports/collection-rate-trend")
+def collection_rate_trend(
+    months: int = 12,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Monthly collection rate trend for the past N months — drives the key dissertation chart."""
+    result = []
+    for i in range(months, 0, -1):
+        # Calculate start and end of each month
+        ref = now()
+        month_start = (ref.replace(day=1) - timedelta(days=30 * (i - 1))).replace(day=1)
+        if month_start.month == 12:
+            month_end = month_start.replace(year=month_start.year + 1, month=1, day=1)
+        else:
+            month_end = month_start.replace(month=month_start.month + 1, day=1)
+
+        billed = db.query(func.sum(Invoice.amount))\
+            .filter(Invoice.issue_date >= month_start, Invoice.issue_date < month_end)\
+            .scalar() or 0
+        collected = db.query(func.sum(Payment.amount))\
+            .filter(Payment.payment_date >= month_start, Payment.payment_date < month_end)\
+            .scalar() or 0
+        overdue = db.query(func.sum(Invoice.balance))\
+            .filter(
+                Invoice.issue_date >= month_start, Invoice.issue_date < month_end,
+                Invoice.status == PaymentStatus.overdue
+            ).scalar() or 0
+
+        rate = round(collected / billed * 100, 1) if billed > 0 else 0.0
+        result.append({
+            "month": month_start.strftime("%b %Y"),
+            "billed": round(billed, 2),
+            "collected": round(collected, 2),
+            "overdue": round(overdue, 2),
+            "collection_rate": rate,
+            "leakage_gap": round(billed - collected, 2)
+        })
+    return result
+
+# ─── Ratepayer Statement ───────────────────────────────────────────────────────
+
+@app.get("/api/ratepayers/{rp_id}/statement")
+def ratepayer_statement(
+    rp_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Full account statement for a ratepayer — invoices, payments, balance.
+    Used for generating printable statements to send to ratepayers.
+    """
+    rp = db.query(Ratepayer).filter(Ratepayer.id == rp_id).first()
+    if not rp:
+        raise HTTPException(404, "Ratepayer not found")
+
+    invoices = db.query(Invoice).filter(Invoice.ratepayer_id == rp_id)\
+                 .order_by(Invoice.issue_date).all()
+    payments = db.query(Payment).filter(Payment.ratepayer_id == rp_id)\
+                 .order_by(Payment.payment_date).all()
+
+    total_billed    = sum(i.amount for i in invoices)
+    total_paid      = sum(p.amount for p in payments)
+    total_outstanding = sum(i.balance for i in invoices)
+    overdue_balance = sum(i.balance for i in invoices if i.status == PaymentStatus.overdue)
+
+    invoice_list = [{
+        "invoice_number": i.invoice_number,
+        "category": i.category,
+        "amount": i.amount,
+        "amount_paid": i.amount_paid,
+        "balance": i.balance,
+        "status": i.status,
+        "issue_date": str(i.issue_date)[:10],
+        "due_date": str(i.due_date)[:10]
+    } for i in invoices]
+
+    payment_list = [{
+        "receipt_number": p.receipt_number,
+        "amount": p.amount,
+        "method": p.payment_method,
+        "currency": p.currency,
+        "date": str(p.payment_date)[:10],
+        "reconciled": p.is_reconciled
+    } for p in payments]
+
+    return {
+        "ratepayer": {
+            "account_number": rp.account_number,
+            "full_name": rp.full_name,
+            "address": rp.address,
+            "ward": rp.ward,
+            "zone": rp.zone,
+            "phone": rp.phone,
+            "email": rp.email,
+            "property_type": rp.property_type
+        },
+        "summary": {
+            "total_billed": round(total_billed, 2),
+            "total_paid": round(total_paid, 2),
+            "total_outstanding": round(total_outstanding, 2),
+            "overdue_balance": round(overdue_balance, 2),
+            "invoice_count": len(invoices),
+            "payment_count": len(payments)
+        },
+        "invoices": invoice_list,
+        "payments": payment_list,
+        "generated_at": str(now())[:16],
+        "generated_by": current_user.full_name
+    }
+
+# ─── Officer Performance Report ────────────────────────────────────────────────
+
+@app.get("/api/reports/officer-performance")
+def officer_performance_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(
+        UserRole.admin, UserRole.auditor, UserRole.accountant
+    ))
+):
+    """
+    Revenue officer performance comparison — collection rates, invoice counts,
+    and Z-score deviation from team average.
+    Addresses D11 open-ended responses: 'automated management reports to reduce manual compilation'.
+    """
+    officers = db.query(User).filter(
+        User.role == UserRole.revenue_officer, User.is_active == True
+    ).all()
+
+    rows = []
+    for officer in officers:
+        total_collected = db.query(func.sum(Payment.amount))\
+            .filter(Payment.collected_by == officer.id).scalar() or 0
+        total_billed = db.query(func.sum(Invoice.amount))\
+            .filter(Invoice.created_by == officer.id).scalar() or 0
+        invoice_count = db.query(func.count(Invoice.id))\
+            .filter(Invoice.created_by == officer.id).scalar() or 0
+        payment_count = db.query(func.count(Payment.id))\
+            .filter(Payment.collected_by == officer.id).scalar() or 0
+        unreconciled = db.query(func.count(Payment.id))\
+            .filter(Payment.collected_by == officer.id, Payment.is_reconciled == False).scalar() or 0
+
+        rate = round(total_collected / total_billed * 100, 1) if total_billed > 0 else 0.0
+        rows.append({
+            "officer_id": officer.id,
+            "full_name": officer.full_name,
+            "username": officer.username,
+            "total_billed": round(total_billed, 2),
+            "total_collected": round(total_collected, 2),
+            "collection_rate": rate,
+            "invoice_count": invoice_count,
+            "payment_count": payment_count,
+            "unreconciled_payments": unreconciled
+        })
+
+    # Compute Z-scores
+    if len(rows) >= 2:
+        rates = [r["collection_rate"] for r in rows]
+        mean_rate = sum(rates) / len(rates)
+        variance = sum((r - mean_rate) ** 2 for r in rates) / max(len(rates) - 1, 1)
+        std_rate = math.sqrt(variance) if variance > 0 else 0
+        for row in rows:
+            z = round((row["collection_rate"] - mean_rate) / std_rate, 2) if std_rate > 0 else 0
+            row["z_score"] = z
+            row["performance"] = (
+                "Above Average" if z > 0.5 else
+                "At Risk" if z < -1.5 else
+                "Average"
+            )
+        team_avg = round(mean_rate, 1)
+    else:
+        for row in rows:
+            row["z_score"] = 0
+            row["performance"] = "Insufficient data"
+        team_avg = rows[0]["collection_rate"] if rows else 0
+
+    return {
+        "officers": sorted(rows, key=lambda r: r["collection_rate"], reverse=True),
+        "team_average_rate": team_avg,
+        "generated_at": str(now())[:16]
+    }
+
+# ─── Cashflow Forecast ────────────────────────────────────────────────────────
+
+@app.get("/api/reports/cashflow-forecast")
+def cashflow_forecast(
+    months_ahead: int = 3,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Simple cashflow forecast for the next N months based on:
+    - Expected receipts: pending invoices due in the period × historical collection rate
+    - Expected payments: budget allocation / 12 × months_ahead
+    Addresses D11 open-ended feature request: 'cash flow forecasting'.
+    """
+    # Historical collection rate (last 90 days)
+    cutoff = now() - timedelta(days=90)
+    hist_billed = db.query(func.sum(Invoice.amount))\
+        .filter(Invoice.issue_date >= cutoff).scalar() or 0
+    hist_collected = db.query(func.sum(Payment.amount))\
+        .filter(Payment.payment_date >= cutoff).scalar() or 0
+    hist_rate = hist_collected / hist_billed if hist_billed > 0 else 0.35
+
+    forecast = []
+    for i in range(1, months_ahead + 1):
+        month_start = now().replace(day=1)
+        if month_start.month + i > 12:
+            target_month = month_start.replace(
+                year=month_start.year + (month_start.month + i - 1) // 12,
+                month=(month_start.month + i - 1) % 12 + 1, day=1
+            )
+        else:
+            target_month = month_start.replace(month=month_start.month + i, day=1)
+
+        if target_month.month == 12:
+            next_month = target_month.replace(year=target_month.year + 1, month=1, day=1)
+        else:
+            next_month = target_month.replace(month=target_month.month + 1, day=1)
+
+        # Invoices due in this month
+        pending_billed = db.query(func.sum(Invoice.amount))\
+            .filter(
+                Invoice.due_date >= target_month,
+                Invoice.due_date < next_month,
+                Invoice.status.in_([PaymentStatus.pending, PaymentStatus.overdue])
+            ).scalar() or 0
+
+        expected_receipts = round(pending_billed * hist_rate, 2)
+        # Budget-based expected payments (total allocated / 12)
+        total_budget = db.query(func.sum(Budget.allocated_amount)).scalar() or 0
+        expected_payments = round(total_budget / 12, 2)
+
+        forecast.append({
+            "month": target_month.strftime("%b %Y"),
+            "pending_invoices_due": round(pending_billed, 2),
+            "expected_receipts": expected_receipts,
+            "expected_payments": expected_payments,
+            "net_cashflow": round(expected_receipts - expected_payments, 2),
+            "collection_rate_assumed": round(hist_rate * 100, 1)
+        })
+
+    return {
+        "forecast": forecast,
+        "basis": f"Historical collection rate (last 90 days): {round(hist_rate*100,1)}%",
+        "generated_at": str(now())[:16]
+    }
+
+# ─── Full Database Backup Export ──────────────────────────────────────────────
+
+@app.get("/api/export/full-backup")
+def full_database_backup(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(UserRole.admin))
+):
+    """
+    Export all tables as a single multi-sheet Excel workbook.
+    Admin-only. Creates a complete point-in-time backup of all financial data.
+    """
+    if not EXCEL_OK:
+        raise HTTPException(500, "openpyxl not installed")
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    def add_sheet(name, headers, rows):
+        ws = wb.create_sheet(name)
+        # Header row
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=c, value=h)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        for r, row in enumerate(rows, 2):
+            for c, val in enumerate(row, 1):
+                ws.cell(row=r, column=c, value=val)
+        # Auto-width
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col), default=8)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 50)
+
+    # Ratepayers
+    rps = db.query(Ratepayer).all()
+    add_sheet("Ratepayers",
+        ["Account #", "Full Name", "Address", "Ward", "Zone", "Phone", "Email", "Type", "Active", "Created"],
+        [[r.account_number, r.full_name, r.address, r.ward, r.zone,
+          r.phone, r.email, r.property_type, r.is_active, str(r.created_at)[:10]] for r in rps])
+
+    # Invoices
+    invs = db.query(Invoice).all()
+    add_sheet("Invoices",
+        ["Invoice #", "Ratepayer ID", "Category", "Amount", "Paid", "Balance", "Status", "Anomaly", "Issue", "Due"],
+        [[i.invoice_number, i.ratepayer_id, i.category, i.amount, i.amount_paid,
+          i.balance, i.status, i.anomaly_flag, str(i.issue_date)[:10], str(i.due_date)[:10]] for i in invs])
+
+    # Payments
+    pmts = db.query(Payment).all()
+    add_sheet("Payments",
+        ["Receipt #", "Ratepayer ID", "Invoice ID", "Amount", "Currency", "Method", "Date", "Reconciled", "Anomaly"],
+        [[p.receipt_number, p.ratepayer_id, p.invoice_id, p.amount, p.currency,
+          p.payment_method, str(p.payment_date)[:10], p.is_reconciled, p.anomaly_flag] for p in pmts])
+
+    # Expenditures
+    exps = db.query(Expenditure).all()
+    add_sheet("Expenditures",
+        ["Reference", "Department", "Description", "Amount", "Budget Line", "Date", "Approved"],
+        [[e.reference_number, e.department, e.description, e.amount,
+          e.budget_line, str(e.expenditure_date)[:10], e.is_approved] for e in exps])
+
+    # Budgets
+    buds = db.query(Budget).all()
+    add_sheet("Budgets",
+        ["Fiscal Year", "Department", "Category", "Allocated", "Spent", "Remaining"],
+        [[b.fiscal_year, b.department, b.category, b.allocated_amount,
+          b.spent_amount, b.remaining] for b in buds])
+
+    # Audit Logs
+    logs = db.query(AuditLog).order_by(desc(AuditLog.timestamp)).limit(5000).all()
+    add_sheet("Audit Log",
+        ["ID", "User ID", "Action", "Table", "Record ID", "Description", "Timestamp"],
+        [[l.id, l.user_id, l.action, l.table_name, l.record_id,
+          l.description, str(l.timestamp)[:16]] for l in logs])
+
+    # Leakage Alerts
+    alerts = db.query(LeakageAlert).all()
+    add_sheet("Leakage Alerts",
+        ["ID", "Type", "Severity", "Description", "Resolved", "Created"],
+        [[a.id, a.alert_type, a.severity, a.description,
+          a.is_resolved, str(a.created_at)[:10]] for a in alerts])
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"COH_FMS_Backup_{now().strftime('%Y%m%d_%H%M')}.xlsx"
+    db.add(AuditLog(
+        user_id=current_user.id, action="EXPORT", table_name="system",
+        description=f"Full database backup exported by {current_user.full_name}"
+    ))
+    db.commit()
+
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+# ─── Management Summary Report ─────────────────────────────────────────────────
+
+@app.get("/api/reports/management-summary")
+def management_summary_report(
+    format: str = "json",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Consolidated management summary report — all key metrics in one endpoint.
+    Designed to satisfy D11 requirement: 'export functions to produce management reports
+    that can be tabled at Council meetings without manual compilation.'
+    """
+    refresh_overdue_invoices(db)
+
+    total_billed     = db.query(func.sum(Invoice.amount)).scalar() or 0
+    total_collected  = db.query(func.sum(Payment.amount)).scalar() or 0
+    total_outstanding = db.query(func.sum(Invoice.balance)).scalar() or 0
+    overdue_balance  = db.query(func.sum(Invoice.balance))\
+        .filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
+    unrecon_amt      = db.query(func.sum(Payment.amount))\
+        .filter(Payment.is_reconciled == False).scalar() or 0
+    collection_rate  = round(total_collected / total_billed * 100, 1) if total_billed > 0 else 0
+    leakage_estimate = round(unrecon_amt * 0.40 + overdue_balance * 0.25, 2)
+
+    # Revenue by category
+    cat_data = db.query(
+        Invoice.category,
+        func.sum(Invoice.amount).label("billed"),
+        func.sum(Invoice.amount_paid).label("collected")
+    ).group_by(Invoice.category).all()
+
+    # Active alerts by severity
+    high_alerts   = db.query(LeakageAlert)\
+        .filter(LeakageAlert.is_resolved == False, LeakageAlert.severity == "high").count()
+    medium_alerts = db.query(LeakageAlert)\
+        .filter(LeakageAlert.is_resolved == False, LeakageAlert.severity == "medium").count()
+
+    # Budget utilisation
+    total_budget  = db.query(func.sum(Budget.allocated_amount)).scalar() or 0
+    total_spent   = db.query(func.sum(Budget.spent_amount)).scalar() or 0
+    budget_utilisation = round(total_spent / total_budget * 100, 1) if total_budget > 0 else 0
+
+    summary = {
+        "report_title": "City of Harare — Financial Management Summary",
+        "generated_at": str(now())[:16],
+        "generated_by": current_user.full_name,
+        "revenue": {
+            "total_billed": round(total_billed, 2),
+            "total_collected": round(total_collected, 2),
+            "total_outstanding": round(total_outstanding, 2),
+            "overdue_balance": round(overdue_balance, 2),
+            "collection_rate_pct": collection_rate,
+            "estimated_leakage": leakage_estimate,
+            "unreconciled_amount": round(unrecon_amt, 2)
+        },
+        "by_category": [{
+            "category": r.category,
+            "billed": round(r.billed or 0, 2),
+            "collected": round(r.collected or 0, 2),
+            "rate": round((r.collected or 0) / (r.billed or 1) * 100, 1)
+        } for r in cat_data],
+        "alerts": {
+            "high_severity": high_alerts,
+            "medium_severity": medium_alerts,
+            "total_active": high_alerts + medium_alerts
+        },
+        "budget": {
+            "total_allocated": round(total_budget, 2),
+            "total_spent": round(total_spent, 2),
+            "utilisation_pct": budget_utilisation
+        },
+        "ratepayers": {
+            "total": db.query(Ratepayer).count(),
+            "active": db.query(Ratepayer).filter(Ratepayer.is_active == True).count()
+        }
+    }
+
+    if format == "json":
+        return summary
+
+    # Excel export
+    headers = ["Metric", "Value"]
+    rows = [
+        ["=== REVENUE PERFORMANCE ===", ""],
+        ["Total Billed (USD)", round(total_billed, 2)],
+        ["Total Collected (USD)", round(total_collected, 2)],
+        ["Outstanding Balance (USD)", round(total_outstanding, 2)],
+        ["Overdue Balance (USD)", round(overdue_balance, 2)],
+        ["Collection Rate (%)", f"{collection_rate}%"],
+        ["Estimated Revenue Leakage (USD)", leakage_estimate],
+        ["Unreconciled Payments (USD)", round(unrecon_amt, 2)],
+        ["", ""],
+        ["=== BUDGET PERFORMANCE ===", ""],
+        ["Total Budget Allocated (USD)", round(total_budget, 2)],
+        ["Total Spent (USD)", round(total_spent, 2)],
+        ["Budget Utilisation (%)", f"{budget_utilisation}%"],
+        ["", ""],
+        ["=== SYSTEM ALERTS ===", ""],
+        ["High Severity Alerts", high_alerts],
+        ["Medium Severity Alerts", medium_alerts],
+        ["", ""],
+        ["Generated At", str(now())[:16]],
+        ["Generated By", current_user.full_name],
+    ]
+    return make_excel_response(
+        headers, rows,
+        f"COH_Management_Summary_{now().strftime('%Y%m%d')}.xlsx",
+        "Management Summary",
+        "City of Harare FMS — Management Summary Report"
+    )
+
