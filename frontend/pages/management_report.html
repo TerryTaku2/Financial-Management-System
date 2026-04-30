@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Management Report — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@media print {
+  .sidebar,.topbar,.btn,#toast-container,.no-print{display:none!important}
+  .app-layout{display:block!important}.main-content{margin:0!important;padding:0!important}
+  .page-content{padding:0!important}body{background:#fff!important;color:#000!important;font-size:10pt}
+  .print-header{display:block!important}.card{border:1px solid #ccc!important;background:#fff!important;page-break-inside:avoid}
+  .stat-card{border:1px solid #ccc!important;background:#f9f9f9!important;color:#000!important}
+  .stat-value{color:#000!important}.card-title{color:#000!important}
+  canvas{max-width:400px!important}
+}
+.print-header{display:none;padding:0 0 20px;border-bottom:2px solid #1F3864;margin-bottom:24px}
+.print-header h1{font-size:20pt;font-weight:700;color:#1F3864;font-family:'Crimson Pro',serif}
+.print-header p{font-size:10pt;color:#444;margin-top:4px}
+.mgmt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.mgmt-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 16px;text-align:center}
+.mgmt-kpi .kv{font-size:26px;font-weight:700;margin-bottom:4px}
+.mgmt-kpi .kl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.kv-blue{color:var(--primary-light)}.kv-green{color:var(--success)}.kv-red{color:var(--danger)}.kv-warn{color:var(--warning)}
+.section-title{font-size:15px;font-weight:700;color:var(--text1);margin:24px 0 12px;border-bottom:1px solid var(--border);padding-bottom:8px}
+.cat-table{width:100%;border-collapse:collapse;font-size:13px}
+.cat-table th{background:var(--bg3);color:var(--text2);font-size:11px;text-transform:uppercase;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.cat-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text1)}
+.cat-table tr:last-child td{border-bottom:none;font-weight:700;background:var(--bg3)}
+.rate-bar{display:inline-block;height:7px;border-radius:4px;margin-left:8px;vertical-align:middle}
+.alert-strip{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.alert-chip{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600}
+.chip-red{background:rgba(192,57,43,.15);color:#c0392b;border:1px solid rgba(192,57,43,.3)}
+.chip-warn{background:rgba(230,126,34,.15);color:#e67e22;border:1px solid rgba(230,126,34,.3)}
+.chip-green{background:rgba(39,174,96,.15);color:var(--success);border:1px solid rgba(39,174,96,.3)}
+.forecast-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px}
+.fc-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 12px;text-align:center}
+.fc-month{font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px}
+.fc-receipts{font-size:15px;font-weight:700;color:var(--success)}
+.fc-payments{font-size:13px;color:var(--danger);margin-top:2px}
+.fc-net{font-size:11.5px;margin-top:4px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Management Report</span>
+      <div class="topbar-right no-print">
+        <button class="btn btn-secondary" onclick="loadData()">↻ Refresh</button>
+        <button class="btn btn-secondary" onclick="window.print()">🖨 Print</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/reports/management-summary?format=xlsx','management_report.xlsx')">⬇ Excel</button>
+        <button class="btn btn-secondary" onclick="exportManagementPDF()">⬇ PDF</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/full-backup','COH_FMS_Backup.xlsx')">💾 Full Backup</button>
+      </div>
+    </div>
+    <div class="page-content">
+
+      <!-- Print header (hidden on screen, visible when printed) -->
+      <div class="print-header">
+        <h1>City of Harare — Financial Management Report</h1>
+        <p id="printMeta"></p>
+      </div>
+
+      <!-- Revenue KPIs -->
+      <div class="mgmt-grid" id="kpiGrid">
+        <div class="mgmt-kpi"><div class="kv kv-blue" id="kvBilled">—</div><div class="kl">Total Billed (USD)</div></div>
+        <div class="mgmt-kpi"><div class="kv kv-green" id="kvCollected">—</div><div class="kl">Total Collected</div></div>
+        <div class="mgmt-kpi"><div class="kv kv-warn" id="kvOutstanding">—</div><div class="kl">Outstanding Balance</div></div>
+        <div class="mgmt-kpi"><div class="kv kv-red" id="kvLeakage">—</div><div class="kl">Est. Revenue Leakage</div></div>
+        <div class="mgmt-kpi"><div class="kv kv-blue" id="kvRate">—</div><div class="kl">Collection Rate</div></div>
+        <div class="mgmt-kpi"><div class="kv kv-green" id="kvBudget">—</div><div class="kl">Budget Utilisation</div></div>
+      </div>
+
+      <!-- Active alerts -->
+      <div class="section-title">Active Leakage Alerts</div>
+      <div class="alert-strip" id="alertStrip">
+        <span class="alert-chip chip-red" id="chipHigh">—</span>
+        <span class="alert-chip chip-warn" id="chipMedium">—</span>
+        <span class="alert-chip chip-green" id="chipTotal">—</span>
+      </div>
+
+      <!-- Revenue by category -->
+      <div class="section-title">Revenue Performance by Category</div>
+      <div style="overflow-x:auto">
+        <table class="cat-table" id="catTable">
+          <thead><tr><th>Category</th><th>Billed (USD)</th><th>Collected (USD)</th><th>Outstanding</th><th>Collection Rate</th></tr></thead>
+          <tbody id="catBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Charts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Revenue by Category</span></div>
+          <canvas id="catChart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Monthly Trend (12 months)</span></div>
+          <canvas id="trendChart" height="220"></canvas>
+        </div>
+      </div>
+
+      <!-- Officer performance -->
+      <div class="section-title">Revenue Officer Performance</div>
+      <div style="overflow-x:auto">
+        <table class="cat-table" id="officerTable">
+          <thead><tr><th>Officer</th><th>Total Billed</th><th>Total Collected</th><th>Collection Rate</th><th>Unreconciled</th><th>Z-Score</th><th>Performance</th></tr></thead>
+          <tbody id="officerBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Cashflow forecast -->
+      <div class="section-title">3-Month Cashflow Forecast</div>
+      <div class="forecast-row" id="forecastGrid"></div>
+      <p style="font-size:11.5px;color:var(--text2);margin-top:8px" id="forecastBasis"></p>
+
+      <!-- Budget variance -->
+      <div class="section-title">Budget Variance</div>
+      <div style="overflow-x:auto">
+        <table class="cat-table" id="budgetTable">
+          <thead><tr><th>Department</th><th>Fiscal Year</th><th>Allocated</th><th>Actual Spent</th><th>Variance</th><th>Status</th></tr></thead>
+          <tbody id="budgetBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../js/shared.js"></script>
+<script>
+const fmt = v => '$' + Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = v => Number(v||0).toFixed(1) + '%';
+let catChart = null, trendChart = null;
+
+async function loadData() {
+  const [summary, trend, officers, forecast, variance] = await Promise.all([
+    api('/api/reports/management-summary'),
+    api('/api/reports/collection-rate-trend?months=12'),
+    api('/api/reports/officer-performance'),
+    api('/api/reports/cashflow-forecast?months_ahead=3'),
+    api('/api/reports/budget-variance')
+  ]);
+
+  // Set print meta
+  document.getElementById('printMeta').textContent =
+    `Generated: ${summary.generated_at} | By: ${summary.generated_by} | City of Harare FMS v2.0`;
+
+  // KPIs
+  const r = summary.revenue;
+  document.getElementById('kvBilled').textContent = fmt(r.total_billed);
+  document.getElementById('kvCollected').textContent = fmt(r.total_collected);
+  document.getElementById('kvOutstanding').textContent = fmt(r.total_outstanding);
+  document.getElementById('kvLeakage').textContent = fmt(r.estimated_leakage);
+  document.getElementById('kvRate').textContent = pct(r.collection_rate_pct);
+  document.getElementById('kvBudget').textContent = pct(summary.budget.utilisation_pct);
+
+  // Alerts
+  document.getElementById('chipHigh').textContent = `${summary.alerts.high_severity} High Severity Alerts`;
+  document.getElementById('chipMedium').textContent = `${summary.alerts.medium_severity} Medium Severity Alerts`;
+  document.getElementById('chipTotal').textContent = `${summary.alerts.total_active} Total Active`;
+
+  // Category table
+  const catBody = document.getElementById('catBody');
+  let totalBilled=0, totalCollected=0, totalOutstanding=0;
+  catBody.innerHTML = summary.by_category.map(c => {
+    totalBilled += c.billed; totalCollected += c.collected;
+    const out = c.billed - c.collected; totalOutstanding += out;
+    const rateColor = c.rate >= 70 ? '#27ae60' : c.rate >= 40 ? '#e67e22' : '#c0392b';
+    return `<tr>
+      <td style="font-weight:600;text-transform:capitalize">${c.category}</td>
+      <td>${fmt(c.billed)}</td>
+      <td>${fmt(c.collected)}</td>
+      <td style="color:var(--danger)">${fmt(out)}</td>
+      <td><span style="color:${rateColor};font-weight:700">${pct(c.rate)}</span>
+        <span class="rate-bar" style="width:${Math.min(c.rate,100)}px;background:${rateColor}"></span>
+      </td>
+    </tr>`;
+  }).join('') + `<tr>
+    <td>TOTAL</td><td>${fmt(totalBilled)}</td><td>${fmt(totalCollected)}</td>
+    <td>${fmt(totalOutstanding)}</td>
+    <td style="font-weight:700;color:${r.collection_rate_pct>=70?'#27ae60':r.collection_rate_pct>=40?'#e67e22':'#c0392b'}">${pct(r.collection_rate_pct)}</td>
+  </tr>`;
+
+  // Category donut chart
+  const ctx1 = document.getElementById('catChart').getContext('2d');
+  if (catChart) catChart.destroy();
+  catChart = new Chart(ctx1, {
+    type: 'doughnut',
+    data: {
+      labels: summary.by_category.map(c => c.category),
+      datasets: [{
+        data: summary.by_category.map(c => c.collected),
+        backgroundColor: ['#3b7dd8','#27ae60','#c9a84c','#c0392b','#8e44ad','#e67e22','#1abc9c','#95a5a6']
+      }]
+    },
+    options: {
+      responsive:true, plugins:{legend:{position:'right',labels:{color:'var(--text1)',font:{size:10}}}}
+    }
+  });
+
+  // Monthly trend
+  const ctx2 = document.getElementById('trendChart').getContext('2d');
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: trend.map(d => d.month),
+      datasets: [
+        { label: 'Billed', data: trend.map(d=>d.billed), backgroundColor:'rgba(59,125,216,0.25)', borderColor:'#3b7dd8', borderWidth:1.5, yAxisID:'y' },
+        { label: 'Collected', data: trend.map(d=>d.collected), backgroundColor:'rgba(39,174,96,0.3)', borderColor:'#27ae60', borderWidth:1.5, yAxisID:'y' },
+        { label: 'Rate %', data: trend.map(d=>d.collection_rate), type:'line', borderColor:'#c9a84c', backgroundColor:'transparent', borderWidth:2, yAxisID:'y1', pointRadius:2 }
+      ]
+    },
+    options: {
+      responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'var(--text1)',font:{size:10}}}},
+      scales:{
+        y:{beginAtZero:true,ticks:{color:'var(--text2)',callback:v=>'$'+v.toLocaleString()},grid:{color:'var(--border)'}},
+        y1:{position:'right',beginAtZero:true,max:100,ticks:{color:'var(--text2)',callback:v=>v+'%'},grid:{drawOnChartArea:false}},
+        x:{ticks:{color:'var(--text2)',maxRotation:45},grid:{color:'var(--border)'}}
+      }
+    }
+  });
+
+  // Officer performance
+  const offBody = document.getElementById('officerBody');
+  offBody.innerHTML = (officers.officers || []).map(o => {
+    const zColor = o.z_score < -1.5 ? '#c0392b' : o.z_score > 0.5 ? '#27ae60' : 'var(--text2)';
+    const perfColor = o.performance==='At Risk'?'#c0392b':o.performance==='Above Average'?'#27ae60':'var(--text2)';
+    return `<tr>
+      <td><strong>${o.full_name}</strong><br><span style="font-size:11px;color:var(--text2)">${o.username}</span></td>
+      <td>${fmt(o.total_billed)}</td>
+      <td>${fmt(o.total_collected)}</td>
+      <td style="font-weight:700;color:${o.collection_rate>=60?'#27ae60':o.collection_rate>=30?'#e67e22':'#c0392b'}">${pct(o.collection_rate)}</td>
+      <td style="color:${o.unreconciled_payments>0?'#c0392b':'#27ae60'}">${o.unreconciled_payments}</td>
+      <td style="color:${zColor};font-weight:600">${o.z_score}</td>
+      <td style="color:${perfColor};font-weight:600">${o.performance}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="text-center text-muted" style="padding:20px">No revenue officers found</td></tr>';
+
+  // Cashflow forecast
+  const fGrid = document.getElementById('forecastGrid');
+  fGrid.innerHTML = (forecast.forecast || []).map(f => {
+    const netColor = f.net_cashflow >= 0 ? '#27ae60' : '#c0392b';
+    return `<div class="fc-card">
+      <div class="fc-month">${f.month}</div>
+      <div class="fc-receipts">${fmt(f.expected_receipts)}</div>
+      <div style="font-size:10.5px;color:var(--text2)">Expected receipts</div>
+      <div class="fc-payments">(${fmt(f.expected_payments)})</div>
+      <div style="font-size:10.5px;color:var(--text2)">Expected payments</div>
+      <div class="fc-net" style="color:${netColor}">Net: ${fmt(f.net_cashflow)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('forecastBasis').textContent = forecast.basis || '';
+
+  // Budget variance
+  const budBody = document.getElementById('budgetBody');
+  budBody.innerHTML = (variance || []).map(b => {
+    const vColor = b.variance < 0 ? '#c0392b' : '#27ae60';
+    return `<tr>
+      <td>${b.department}</td>
+      <td>${b.fiscal_year}</td>
+      <td>${fmt(b.allocated)}</td>
+      <td>${fmt(b.actual_spent)}</td>
+      <td style="color:${vColor};font-weight:600">${fmt(b.variance)}</td>
+      <td style="color:${vColor};font-weight:600">${b.status}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No budget data</td></tr>';
+}
+
+requireAuth(); buildSidebar('management_report');
+loadData();
+
+async function exportManagementPDF() {
+  try {
+    const d = await apiFetch('/api/reports/management-summary?format=json');
+    const rv = d.revenue || {};
+    const cols = ['Section', 'Metric', 'Value'];
+    const rows = [
+      ['Revenue', 'Total Billed',       fmt(rv.total_billed)],
+      ['Revenue', 'Total Collected',    fmt(rv.total_collected)],
+      ['Revenue', 'Collection Rate',    rv.collection_rate_pct + '%'],
+      ['Revenue', 'Outstanding Balance',fmt(rv.total_outstanding)],
+      ['Revenue', 'Overdue Balance',    fmt(rv.overdue_balance)],
+      ['Revenue', 'Est. Leakage',       fmt(rv.estimated_leakage)],
+      ...(d.by_category || []).map(c => ['By Category', c.category, `Billed: ${fmt(c.billed)} | Collected: ${fmt(c.collected)} (${c.rate}%)`]),
+      ['Alerts',  'High Severity',      d.alerts?.high_severity || 0],
+      ['Alerts',  'Medium Severity',    d.alerts?.medium_severity || 0],
+      ['Budget',  'Total Allocated',    fmt(d.budget?.total_allocated)],
+      ['Budget',  'Total Spent',        fmt(d.budget?.total_spent)],
+      ['Budget',  'Utilisation',        (d.budget?.utilisation_pct || 0) + '%'],
+      ['Ratepayers', 'Total',           d.ratepayers?.total || 0],
+      ['Ratepayers', 'Active',          d.ratepayers?.active || 0],
+    ];
+    await exportPDF('Management Summary Report', cols, rows, 'management_report.pdf',
+                    `Generated: ${d.generated_at || ''} by ${d.generated_by || ''}`);
+  } catch(e) { toast('PDF export failed: ' + e.message, 'error'); }
+}
+</script>
+</body>
+</html>

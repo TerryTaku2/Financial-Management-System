@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invoices — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Invoice Management</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+        <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importInvoices(this)">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/invoices?format=csv','invoices.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/invoices?format=xlsx','invoices.xlsx')">⬇ Excel</button>
+        <button class="btn btn-secondary" title="Download import template" onclick="downloadExport('/api/templates/invoices?format=xlsx','template_invoices.xlsx')">📋 Template</button>
+        <button class="btn btn-secondary" onclick="exportTablePDF('Invoice Register','invTable','invoices.pdf')">⬇ PDF</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ New Invoice</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="filter-bar">
+          <select id="statusFilter" onchange="loadInvoices()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option><option value="paid">Paid</option>
+            <option value="overdue">Overdue</option><option value="disputed">Disputed</option><option value="waived">Waived</option>
+          </select>
+          <select id="categoryFilter" onchange="loadInvoices()">
+            <option value="">All Categories</option>
+            <option>rates</option><option>water</option><option>sewerage</option>
+            <option>refuse</option><option>licensing</option><option>parking</option><option>rentals</option><option>other</option>
+          </select>
+          <select id="anomalyFilter" onchange="loadInvoices()">
+            <option value="">All Anomaly Levels</option>
+            <option value="high">High Anomaly</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+          <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Invoice #</th><th>Ratepayer</th><th>Category</th>
+              <th>Amount</th><th>Paid</th><th>Balance</th>
+              <th>Due Date</th><th>Status</th><th>Anomaly</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="invTable"><tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Invoice Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Create Invoice</span>
+      <button class="modal-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <div class="form-group"><label>Ratepayer ID</label><input id="f_rpid" type="number" placeholder="Enter ratepayer ID"></div>
+    <div class="form-group"><label>Revenue Category</label>
+      <select id="f_cat">
+        <option value="rates">Rates</option><option value="water">Water</option>
+        <option value="sewerage">Sewerage</option><option value="refuse">Refuse</option>
+        <option value="licensing">Licensing</option><option value="parking">Parking</option>
+        <option value="rentals">Rentals</option><option value="other">Other</option>
+      </select>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Amount (USD)</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Due Date</label><input id="f_due" type="date"></div>
+    </div>
+    <div class="form-group"><label>Notes (optional)</label><textarea id="f_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createInvoice()">Create Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Invoice Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Edit Invoice</span>
+      <button class="modal-close" onclick="closeModal('editModal')">×</button>
+    </div>
+    <input type="hidden" id="e_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Status</label>
+        <select id="e_status">
+          <option value="pending">Pending</option><option value="overdue">Overdue</option>
+          <option value="disputed">Disputed</option><option value="waived">Waived</option><option value="paid">Paid</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Due Date</label><input id="e_due" type="date"></div>
+    </div>
+    <div class="form-group"><label>Amount (USD)</label><input id="e_amount" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="form-group"><label>Notes</label><textarea id="e_notes" rows="2" placeholder="Notes..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('invoices');
+let currentPage = 1;
+const user = getUser();
+
+// Set default due date
+const d = new Date(); d.setDate(d.getDate()+30);
+document.getElementById('f_due').value = d.toISOString().slice(0,10);
+
+// Apply URL context on load
+(function() {
+  const p = getUrlParams();
+  if (p.status)  document.getElementById('statusFilter').value   = p.status;
+  if (p.anomaly) document.getElementById('anomalyFilter').value  = p.anomaly;
+  if (p.category)document.getElementById('categoryFilter').value = p.category;
+  if (p.ratepayer_id) {
+    // Store for filtering
+    window._filterRatepayerId = parseInt(p.ratepayer_id);
+    document.querySelector('.topbar-title').textContent = 'Invoices — Ratepayer #' + p.ratepayer_id;
+  }
+})();
+
+function openAddModal() { openModal('addModal'); }
+
+async function loadInvoices(page = 1) {
+  currentPage = page;
+  const status  = document.getElementById('statusFilter').value;
+  const cat     = document.getElementById('categoryFilter').value;
+  const anomaly = document.getElementById('anomalyFilter').value;
+  const skip    = (page-1) * 30;
+  try {
+    let url = `/api/invoices?skip=${skip}&limit=30`;
+    if (status)  url += `&status=${status}`;
+    if (cat)     url += `&category=${cat}`;
+    if (anomaly) url += `&anomaly=${anomaly}`;
+    if (window._filterRatepayerId) url += `&ratepayer_id=${window._filterRatepayerId}`;
+    const data = await apiFetch(url);
+    document.getElementById('countBadge').textContent = `${data.total} invoices`;
+    const tbody = document.getElementById('invTable');
+    if (data.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🧾</div><p>No invoices found</p></div></td></tr>`;
+      return;
+    }
+    const canEdit = ['admin','accountant','revenue_officer'].includes(user?.role);
+    tbody.innerHTML = data.items.map(inv => `
+      <tr title="${inv.anomaly_reason || ''}">
+        <td><code style="font-size:11.5px;color:var(--primary-light)">${inv.invoice_number}</code></td>
+        <td>
+          <div style="font-weight:500;font-size:13px">${inv.ratepayer_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${inv.account_number}</div>
+        </td>
+        <td><span class="badge badge-info">${inv.category}</span></td>
+        <td class="fw-bold">${fmtMoney(inv.amount)}</td>
+        <td class="text-success">${fmtMoney(inv.amount_paid)}</td>
+        <td class="${inv.balance > 0 ? 'text-danger' : 'text-success'}">${fmtMoney(inv.balance)}</td>
+        <td style="font-size:12.5px;color:var(--text2)">${fmtDate(inv.due_date)}</td>
+        <td>${statusBadge(inv.status)}</td>
+        <td>${anomalyBadge(inv.anomaly_flag)}</td>
+        <td style="white-space:nowrap">
+          ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="openEditModal(${JSON.stringify(inv).replace(/"/g,'&quot;')})">Edit</button>` : ''}
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('payments.html',{ratepayer_id:inv.ratepayer_id})}">Payments</a>
+          ${inv.balance > 0 ? `<a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{account:inv.account_number})}">Aging</a>` : ''}
+          ${canEdit && inv.amount_paid == 0 ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id},'${inv.invoice_number}')">Delete</button>` : ''}
+        </td>
+      </tr>`).join('');
+    renderPagination('pagination', data.total, 30, page, 'loadInvoices');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openEditModal(inv) {
+  document.getElementById('e_id').value     = inv.id;
+  document.getElementById('e_status').value = inv.status;
+  document.getElementById('e_due').value    = inv.due_date;
+  document.getElementById('e_amount').value = inv.amount;
+  document.getElementById('e_notes').value  = inv.notes || '';
+  openModal('editModal');
+}
+
+async function saveEdit() {
+  const id = document.getElementById('e_id').value;
+  const data = {
+    status:   document.getElementById('e_status').value,
+    due_date: document.getElementById('e_due').value,
+    amount:   parseFloat(document.getElementById('e_amount').value),
+    notes:    document.getElementById('e_notes').value,
+  };
+  try {
+    await apiPut(`/api/invoices/${id}`, data);
+    toast('Invoice updated', 'success');
+    closeModal('editModal');
+    loadInvoices(currentPage);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteInvoice(id, num) {
+  await confirmDelete(`Delete invoice ${num}? This cannot be undone.`, async () => {
+    try {
+      await apiDelete(`/api/invoices/${id}`);
+      toast('Invoice deleted', 'success');
+      loadInvoices(currentPage);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function createInvoice() {
+  const data = {
+    ratepayer_id: parseInt(document.getElementById('f_rpid').value),
+    category:     document.getElementById('f_cat').value,
+    amount:       parseFloat(document.getElementById('f_amount').value),
+    due_date:     document.getElementById('f_due').value,
+    notes:        document.getElementById('f_notes').value,
+  };
+  if (!data.ratepayer_id || !data.amount || !data.due_date) { toast('Please fill all required fields', 'warning'); return; }
+  try {
+    const res = await apiPost('/api/invoices', data);
+    toast(`Invoice ${res.invoice_number} created`, 'success');
+    closeModal('addModal');
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function importInvoices(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/invoices', file);
+    toast(res.message, 'success');
+    if (res.errors && res.errors.length) alert(`Warnings:\n${res.errors.join('\n')}`);
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+  input.value = '';
+}
+
+loadInvoices();
+</script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Budget — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Budget Management</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import Budgets</button>
+        <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importBudgets(this)">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/budgets?format=csv','budgets.csv')" id="btnExportCsv">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/budgets?format=xlsx','budgets.xlsx')" id="btnExportXlsx">⬇ Excel</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/templates/budgets?format=xlsx','template_budgets.xlsx')">📋 Template</button>
+        <button class="btn btn-secondary" onclick="exportTablePDF('Budget Register','budgetTable','budgets.pdf')">⬇ PDF</button>
+        <button class="btn btn-secondary" onclick="navigateTo('aging.html',{})">⏳ Creditor Aging</button>
+        <button class="btn btn-primary" id="btnAddBudget" onclick="openAddModal()" style="display:none">+ Add Budget</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="grid-2 mb-4">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Budget Utilisation by Department</span></div>
+          <canvas id="budgetChart" height="240"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Allocation vs Spent</span></div>
+          <canvas id="budgetPie" height="240"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Department Budgets</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Department</th><th>Fiscal Year</th><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Utilisation</th><th>Status</th><th id="actionsHdr">Actions</th></tr></thead>
+            <tbody id="budgetTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Budget Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Add Budget Entry</span>
+      <button class="modal-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <input type="hidden" id="f_editId">
+    <div class="grid-2">
+      <div class="form-group"><label>Fiscal Year</label><input id="f_fy" placeholder="e.g. 2025/2026"></div>
+      <div class="form-group"><label>Category</label><input id="f_cat" placeholder="e.g. Operations"></div>
+    </div>
+    <div class="form-group"><label>Department</label>
+      <select id="f_dept">
+        <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
+        <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+      </select>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Allocated Amount (USD)</label><input id="f_alloc" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Spent Amount (USD)</label><input id="f_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveBudget()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('budget');
+const user = getUser();
+const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
+
+let barChart = null, pieChart = null;
+
+if (canManage) {
+  document.getElementById('btnAddBudget').style.display = '';
+  document.getElementById('btnExportCsv').onclick  = () => downloadExport('/api/reports/financial-summary?format=csv','financial_summary.csv');
+  document.getElementById('btnExportXlsx').onclick = () => downloadExport('/api/reports/financial-summary?format=xlsx','financial_summary.xlsx');
+}
+
+function openAddModal() {
+  document.getElementById('f_editId').value = '';
+  document.getElementById('modalTitle').textContent = 'Add Budget Entry';
+  document.getElementById('saveBtn').textContent = 'Create';
+  ['f_fy','f_cat','f_alloc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_spent').value = '0';
+  document.getElementById('f_dept').value = 'Finance';
+  openModal('addModal');
+}
+
+function openEditModal(b) {
+  document.getElementById('f_editId').value = b.id;
+  document.getElementById('modalTitle').textContent = 'Edit Budget Entry';
+  document.getElementById('saveBtn').textContent = 'Save Changes';
+  document.getElementById('f_fy').value    = b.fiscal_year;
+  document.getElementById('f_dept').value  = b.department;
+  document.getElementById('f_cat').value   = b.category;
+  document.getElementById('f_alloc').value = b.allocated;
+  document.getElementById('f_spent').value = b.spent;
+  openModal('addModal');
+}
+
+async function saveBudget() {
+  const editId = document.getElementById('f_editId').value;
+  const data = {
+    fiscal_year:      document.getElementById('f_fy').value.trim(),
+    department:       document.getElementById('f_dept').value,
+    category:         document.getElementById('f_cat').value.trim(),
+    allocated_amount: parseFloat(document.getElementById('f_alloc').value) || 0,
+    spent_amount:     parseFloat(document.getElementById('f_spent').value) || 0,
+  };
+  if (!data.fiscal_year || !data.allocated_amount) { toast('Fiscal year and allocated amount required','warning'); return; }
+  try {
+    if (editId) {
+      await apiPut(`/api/budgets/${editId}`, data);
+      toast('Budget updated','success');
+    } else {
+      await apiPost('/api/budgets', data);
+      toast('Budget created','success');
+    }
+    closeModal('addModal');
+    loadBudget();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteBudget(id, dept, fy) {
+  await confirmDelete(`Delete budget for ${dept} (${fy})? This cannot be undone.`, async () => {
+    try { await apiDelete(`/api/budgets/${id}`); toast('Budget deleted','success'); loadBudget(); }
+    catch(e) { toast(e.message,'error'); }
+  });
+}
+
+async function loadBudget() {
+  try {
+    const data = await apiFetch('/api/budgets');
+    const tbody = document.getElementById('budgetTable');
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No budget entries. Upload a file or add manually.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(b => {
+      const pct = b.utilisation;
+      const statusCls = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'paid';
+      const statusTxt = pct >= 90 ? 'Critical' : pct >= 70 ? 'Watch' : 'On Track';
+      return `<tr>
+        <td style="font-weight:500">${b.department}</td>
+        <td style="color:var(--text2)">${b.fiscal_year}</td>
+        <td style="color:var(--text2);font-size:12.5px">${b.category}</td>
+        <td>${fmtMoney(b.allocated)}</td>
+        <td class="text-warning">${fmtMoney(b.spent)}</td>
+        <td class="${b.remaining < 0 ? 'text-danger' : 'text-success'}">${fmtMoney(b.remaining)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+              <div style="width:${Math.min(pct,100)}%;height:100%;background:${pct>=90?'var(--danger)':pct>=70?'var(--warning)':'var(--success)'};border-radius:4px"></div>
+            </div>
+            <span style="font-size:12px;min-width:36px">${pct}%</span>
+          </div>
+        </td>
+        <td><span class="badge badge-${statusCls}">${statusTxt}</span></td>
+        <td style="white-space:nowrap">
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{department:b.department})}">Aging</a>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('expenditures.html',{department:b.department})}">Expenditures</a>
+          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openEditModal(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteBudget(${b.id},'${b.department}','${b.fiscal_year}')">Delete</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Charts
+    if (barChart) { barChart.destroy(); barChart = null; }
+    if (pieChart)  { pieChart.destroy();  pieChart = null; }
+
+    barChart = new Chart(document.getElementById('budgetChart'), {
+      type: 'bar', data: {
+        labels: data.map(b => b.department),
+        datasets: [
+          { label: 'Allocated', data: data.map(b => b.allocated), backgroundColor: 'rgba(59,125,216,0.6)' },
+          { label: 'Spent',     data: data.map(b => b.spent),     backgroundColor: 'rgba(243,156,18,0.6)' },
+        ]
+      },
+      options: { responsive:true, plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true,ticks:{callback:v=>'$'+v.toLocaleString()}}} }
+    });
+
+    const totalAllocated = data.reduce((s,b) => s+b.allocated, 0);
+    const totalSpent     = data.reduce((s,b) => s+b.spent, 0);
+    pieChart = new Chart(document.getElementById('budgetPie'), {
+      type: 'doughnut', data: {
+        labels: ['Spent','Remaining'],
+        datasets: [{ data: [totalSpent, Math.max(0, totalAllocated-totalSpent)],
+                     backgroundColor:['rgba(243,156,18,0.7)','rgba(59,125,216,0.7)'],
+                     borderColor:['#f39c12','#3b7dd8'], borderWidth:1 }]
+      },
+      options: { responsive:true, plugins:{ legend:{position:'bottom'},
+        tooltip:{ callbacks:{ label: ctx => ` $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}` } } } }
+    });
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function importBudgets(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/budgets', file);
+    toast(res.message, 'success');
+    if (res.errors && res.errors.length) alert(`Warnings:\n${res.errors.join('\n')}`);
+    loadBudget();
+  } catch(e) { toast(e.message,'error'); }
+  input.value = '';
+}
+
+loadBudget();
+</script>
+</body>
+</html>

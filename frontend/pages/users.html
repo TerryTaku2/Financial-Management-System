@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Users — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">User Management</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/users?format=csv','users.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/users?format=xlsx','users.xlsx')">⬇ Excel</button>
+        <button class="btn btn-secondary" onclick="exportTablePDF('User Registry','userTable','users.pdf')">⬇ PDF</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add User</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Full Name</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+            <tbody id="userTable"><tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Add User</span>
+      <button class="modal-close" onclick="closeModal('userModal')">×</button>
+    </div>
+    <input type="hidden" id="f_editId">
+    <div class="grid-2">
+      <div class="form-group"><label>Full Name</label><input id="f_fname" placeholder="e.g. Tariro Chaza"></div>
+      <div class="form-group"><label>Username</label><input id="f_uname" placeholder="e.g. t.chaza"></div>
+    </div>
+    <div class="form-group"><label>Email</label><input id="f_email" type="email" placeholder="user@harare.gov.zw"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Role</label>
+        <select id="f_role">
+          <option value="revenue_officer">Revenue Officer</option>
+          <option value="accountant">Accountant</option>
+          <option value="auditor">Auditor</option>
+          <option value="budget_officer">Budget Officer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group" id="statusGroup" style="display:none"><label>Status</label>
+        <select id="f_active">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="pwdGroup"><label>Password <span id="pwdHint" style="font-size:11px;color:var(--text3)">(required)</span></label>
+      <input id="f_pwd" type="password" placeholder="Enter password">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('users');
+const roleColors = { admin:'danger', revenue_officer:'info', auditor:'warning', accountant:'paid', budget_officer:'low' };
+const me = getUser();
+
+function openAddModal() {
+  document.getElementById('f_editId').value = '';
+  document.getElementById('modalTitle').textContent = 'Add User';
+  document.getElementById('saveBtn').textContent = 'Create User';
+  document.getElementById('f_uname').disabled = false;
+  document.getElementById('statusGroup').style.display = 'none';
+  document.getElementById('pwdHint').textContent = '(required)';
+  ['f_fname','f_uname','f_email','f_pwd'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_role').value = 'revenue_officer';
+  openModal('userModal');
+}
+
+function openEditModal(u) {
+  document.getElementById('f_editId').value  = u.id;
+  document.getElementById('modalTitle').textContent = `Edit User — ${u.username}`;
+  document.getElementById('saveBtn').textContent = 'Save Changes';
+  document.getElementById('f_uname').disabled = true;
+  document.getElementById('statusGroup').style.display = '';
+  document.getElementById('pwdHint').textContent = '(leave blank to keep current)';
+  document.getElementById('f_fname').value   = u.full_name;
+  document.getElementById('f_uname').value   = u.username;
+  document.getElementById('f_email').value   = u.email;
+  document.getElementById('f_role').value    = u.role;
+  document.getElementById('f_active').value  = u.is_active ? 'true' : 'false';
+  document.getElementById('f_pwd').value     = '';
+  openModal('userModal');
+}
+
+async function saveUser() {
+  const editId = document.getElementById('f_editId').value;
+  const pwd    = document.getElementById('f_pwd').value;
+  if (editId) {
+    const data = {
+      full_name: document.getElementById('f_fname').value,
+      email:     document.getElementById('f_email').value,
+      role:      document.getElementById('f_role').value,
+      is_active: document.getElementById('f_active').value === 'true',
+    };
+    if (pwd) data.password = pwd;
+    try {
+      await apiPut(`/api/users/${editId}`, data);
+      toast('User updated', 'success');
+      closeModal('userModal');
+      loadUsers();
+    } catch(e) { toast(e.message,'error'); }
+  } else {
+    if (!pwd) { toast('Password is required for new users', 'warning'); return; }
+    const data = {
+      username:  document.getElementById('f_uname').value,
+      full_name: document.getElementById('f_fname').value,
+      email:     document.getElementById('f_email').value,
+      role:      document.getElementById('f_role').value,
+      password:  pwd,
+    };
+    if (!data.username || !data.full_name || !data.email) { toast('All fields are required', 'warning'); return; }
+    try {
+      await apiPost('/api/users', data);
+      toast('User created', 'success');
+      closeModal('userModal');
+      loadUsers();
+    } catch(e) { toast(e.message,'error'); }
+  }
+}
+
+async function deactivateUser(id, name) {
+  await confirmDelete(`Deactivate user "${name}"? They will no longer be able to log in.`, async () => {
+    try {
+      await apiDelete(`/api/users/${id}`);
+      toast('User deactivated', 'success');
+      loadUsers();
+    } catch(e) { toast(e.message,'error'); }
+  });
+}
+
+async function loadUsers() {
+  try {
+    const data = await apiFetch('/api/users');
+    const tbody = document.getElementById('userTable');
+    tbody.innerHTML = data.map(u => `<tr>
+      <td style="color:var(--text3)">${u.id}</td>
+      <td style="font-weight:500">${u.full_name}</td>
+      <td><code style="font-size:12px;color:var(--primary-light)">${u.username}</code></td>
+      <td style="color:var(--text2);font-size:12.5px">${u.email}</td>
+      <td><span class="badge badge-${roleColors[u.role]||'info'}">${u.role.replace('_',' ')}</span></td>
+      <td>${u.is_active ? '<span class="badge badge-paid">Active</span>' : '<span class="badge badge-danger">Disabled</span>'}</td>
+      <td style="font-size:12px;color:var(--text2)">${u.last_login || '—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-secondary" onclick="openEditModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">Edit</button>
+        ${u.id !== me?.id && u.is_active ? `<button class="btn btn-sm btn-danger" onclick="deactivateUser(${u.id},'${u.full_name}')">Deactivate</button>` : ''}
+      </td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+loadUsers();
+</script>
+</body>
+</html>

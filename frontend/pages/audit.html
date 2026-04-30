@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audit Trail — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Audit Trail</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=csv','audit_trail.csv')">⬇ CSV</button>
+        <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=xlsx','audit_trail.xlsx')">⬇ Excel</button>
+        <button class="btn btn-secondary" onclick="exportTablePDF('Audit Trail','auditTable','audit_trail.pdf')">⬇ PDF</button>
+      </div>
+    </div>
+    <div class="page-content">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">System Activity Log</span>
+          <span style="font-size:12px;color:var(--text2)">All actions are immutably logged</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>IP Address</th><th>Timestamp</th></tr></thead>
+            <tbody id="auditTable"><tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('audit');
+const actionColors = { LOGIN:'info', CREATE:'paid', UPDATE:'warning', FLAG:'danger', DELETE:'danger' };
+
+async function loadAudit(page = 1) {
+  const skip = (page-1)*30;
+  try {
+    const data = await apiFetch(`/api/audit-logs?skip=${skip}&limit=30`);
+    const tbody = document.getElementById('auditTable');
+    if (!data.items.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>No audit logs</p></div></td></tr>'; return; }
+    tbody.innerHTML = data.items.map((log,i) => `<tr>
+      <td style="color:var(--text3);font-size:12px">${skip+i+1}</td>
+      <td style="font-weight:500">${log.user}</td>
+      <td><span class="badge badge-${actionColors[log.action]||'info'}">${log.action}</span></td>
+      <td style="color:var(--text2);font-size:12.5px">${log.table_name}</td>
+      <td style="font-size:12.5px">${log.description}</td>
+      <td style="font-size:12px;color:var(--text3)">${log.ip_address||'—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${log.timestamp}</td>
+    </tr>`).join('');
+    renderPagination('pagination', data.total, 30, page, 'loadAudit');
+  } catch(e) { toast(e.message,'error'); }
+}
+loadAudit();
+</script>
+</body>
+</html>

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — City of Harare Financial Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:         #07091a;
+  --bg2:        #0d1128;
+  --bg3:        #131830;
+  --bg4:        #1a2040;
+  --panel:      rgba(13,17,40,0.88);
+  --border:     rgba(255,255,255,0.08);
+  --border-hi:  rgba(255,255,255,0.15);
+  --text:       #eef0f8;
+  --text2:      #9aa2be;
+  --text3:      #5e6888;
+  --primary:    #4a9eff;
+  --primary-l:  #74b8ff;
+  --primary-d:  #2b6ecb;
+  --secondary:  #7c5cff;
+  --gold:       #f0c75e;
+  --green:      #2ecc71;
+  --red:        #ff4d6d;
+  --warn:       #ffc107;
+  --glow:       rgba(74,158,255,0.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+}
+body{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow-x:hidden;
+  padding:20px;
+}
+
+/* ── Animated background ── */
+#bgCanvas{position:fixed;inset:0;z-index:0;opacity:.65}
+.bg-orbs{position:fixed;inset:0;z-index:0;pointer-events:none}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);animation:orbDrift 14s ease-in-out infinite alternate}
+.orb-1{width:700px;height:700px;background:radial-gradient(circle,rgba(74,158,255,.1),transparent 70%);top:-250px;left:-250px}
+.orb-2{width:500px;height:500px;background:radial-gradient(circle,rgba(124,92,255,.09),transparent 70%);bottom:-200px;right:-150px;animation-duration:11s;animation-delay:-4s}
+.orb-3{width:350px;height:350px;background:radial-gradient(circle,rgba(240,199,94,.06),transparent 70%);top:40%;left:50%;transform:translate(-50%,-50%);animation-duration:17s;animation-delay:-8s}
+@keyframes orbDrift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(50px,35px) scale(1.08)}}
+.grid-overlay{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 40%,transparent 100%);
+}
+
+/* ── Card ── */
+.login-card{
+  position:relative;z-index:10;
+  width:100%;max-width:440px;
+  background:var(--panel);
+  border-radius:24px;
+  border:1px solid var(--border);
+  box-shadow:0 40px 100px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(40px) saturate(180%);
+  padding:40px 36px 32px;
+  animation:cardIn .65s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(28px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* ── Branding strip at top ── */
+.card-brand{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:28px;
+  padding-bottom:22px;
+  border-bottom:1px solid var(--border);
+}
+.brand-ring{
+  width:52px;height:52px;flex-shrink:0;border-radius:50%;
+  background:linear-gradient(135deg,rgba(74,158,255,.15),rgba(124,92,255,.1));
+  border:1.5px solid rgba(74,158,255,.3);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 20px rgba(74,158,255,.18);
+  animation:brandPulse 3.5s ease-in-out infinite;
+  overflow:hidden;padding:4px;
+}
+.brand-ring img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(74,158,255,.3))}
+@keyframes brandPulse{0%,100%{box-shadow:0 0 20px rgba(74,158,255,.18)}50%{box-shadow:0 0 34px rgba(74,158,255,.32)}}
+.brand-text .org{
+  font-family:'Crimson Pro',serif;font-size:16px;font-weight:700;
+  background:linear-gradient(135deg,#fff 30%,var(--primary-l));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1.15;
+}
+.brand-text .dept{font-size:10.5px;color:var(--text3);letter-spacing:.04em;margin-top:2px}
+
+/* ── Form header ── */
+.form-header{margin-bottom:24px}
+.form-title{
+  font-family:'Crimson Pro',serif;font-size:28px;font-weight:700;
+  color:var(--text);line-height:1.2;margin-bottom:4px;
+}
+.form-title span{
+  background:linear-gradient(135deg,var(--primary-l),var(--secondary));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.form-sub{font-size:12.5px;color:var(--text3)}
+
+/* ── Message boxes ── */
+.msg-box{
+  border-radius:10px;padding:10px 12px 10px 36px;
+  font-size:12.5px;margin-bottom:16px;display:none;
+  position:relative;animation:msgIn .3s cubic-bezier(.16,1,.3,1);
+}
+@keyframes msgIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.msg-box.show{display:block}
+.msg-box::before{position:absolute;left:11px;top:10px;font-size:14px}
+.msg-box.error{background:rgba(255,77,109,.1);border:1px solid rgba(255,77,109,.28);color:var(--red)}
+.msg-box.error::before{content:'⚠'}
+.msg-box.success{background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.28);color:var(--green)}
+.msg-box.success::before{content:'✓'}
+.msg-box.warning{background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.22);color:var(--warn)}
+.msg-box.warning::before{content:'ⓘ'}
+
+/* ── Form groups ── */
+.fg{margin-bottom:16px}
+.fg label{display:block;font-size:10.5px;font-weight:700;color:var(--text2);margin-bottom:7px;text-transform:uppercase;letter-spacing:.1em}
+.input-wrap{position:relative;display:flex;align-items:center}
+.input-wrap svg{position:absolute;left:13px;pointer-events:none;color:var(--text3);transition:color .2s}
+.input-wrap:focus-within svg{color:var(--primary)}
+.fg input[type=text],
+.fg input[type=password]{
+  width:100%;padding:12px 42px 12px 40px;
+  background:rgba(255,255,255,.04);
+  border:1.5px solid var(--border);
+  border-radius:11px;
+  color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;
+  outline:none;transition:all .22s cubic-bezier(.4,0,.2,1);
+  -webkit-appearance:none;
+}
+.fg input::placeholder{color:var(--text3)}
+.fg input:hover{border-color:var(--border-hi);background:rgba(255,255,255,.06)}
+.fg input:focus{border-color:var(--primary);background:rgba(74,158,255,.05);box-shadow:0 0 0 3px rgba(74,158,255,.12)}
+.fg input.has-error{border-color:var(--red)!important;background:rgba(255,77,109,.04)!important}
+.fg input.has-error:focus{box-shadow:0 0 0 3px rgba(255,77,109,.1)!important}
+.fg input.valid{border-color:var(--green)!important}
+.pwd-btn{
+  position:absolute;right:10px;background:none;border:none;cursor:pointer;
+  color:var(--text3);padding:7px;display:flex;align-items:center;
+  transition:color .2s,transform .18s;border-radius:6px;
+}
+.pwd-btn:hover{color:var(--primary);transform:scale(1.1)}
+.field-hint{font-size:11px;margin-top:4px;display:none}
+.field-hint.error{display:block;color:var(--red)}
+.field-hint.ok{display:block;color:var(--green)}
+.capslock-warn{display:none;font-size:11px;color:var(--warn);margin-top:4px;align-items:center;gap:5px}
+.capslock-warn.show{display:flex}
+
+/* ── Remember / forgot ── */
+.check-row{display:flex;align-items:center;justify-content:space-between;margin:4px 0 0}
+.check-left{display:flex;align-items:center;gap:8px}
+.check-left input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
+.check-left label{font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none}
+.forgot-link a{font-size:12px;color:var(--primary);text-decoration:none;transition:all .2s}
+.forgot-link a:hover{color:var(--primary-l);text-decoration:underline;text-underline-offset:3px}
+
+/* ── Submit button ── */
+.btn-submit{
+  width:100%;margin-top:22px;padding:14px 20px;
+  background:linear-gradient(135deg,var(--primary),var(--secondary));
+  color:#fff;border:none;border-radius:11px;
+  font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;letter-spacing:.04em;text-transform:uppercase;
+  position:relative;overflow:hidden;
+  transition:all .28s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 6px 20px rgba(74,158,255,.28);
+  -webkit-appearance:none;
+}
+.btn-submit::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);
+  animation:shimmer 2.5s linear infinite;
+}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.btn-submit:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 28px rgba(74,158,255,.38)}
+.btn-submit:active:not(:disabled){transform:translateY(0)}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed}
+.btn-inner{display:flex;align-items:center;justify-content:center;gap:9px}
+.spin{width:17px;height:17px;border-radius:50%;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin .7s linear infinite;display:none;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-submit.loading .spin{display:block}
+.btn-submit.loading .btn-txt{display:none}
+.success-check{display:none;animation:checkBounce .45s cubic-bezier(.16,1,.3,1) both}
+@keyframes checkBounce{from{transform:scale(0)}to{transform:scale(1)}}
+.btn-submit.done .btn-txt{display:none}
+.btn-submit.done .success-check{display:inline}
+.btn-submit.done{background:linear-gradient(135deg,var(--green),#27ae60);box-shadow:0 6px 20px rgba(46,204,113,.28)}
+.login-progress{position:absolute;bottom:0;left:0;width:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--secondary));transition:width .4s ease;border-radius:2px}
+
+/* ── Demo credentials ── */
+.demo-section{margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+.demo-label{
+  text-align:center;font-size:10px;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--text3);font-weight:700;
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;justify-content:center;
+}
+.demo-label::before,.demo-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.demo-chip{
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:9px;padding:10px 11px;cursor:pointer;
+  transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+.demo-chip:hover{border-color:rgba(74,158,255,.32);background:rgba(74,158,255,.07);transform:translateY(-2px);box-shadow:0 5px 16px rgba(74,158,255,.13)}
+.demo-chip:active{transform:translateY(0)}
+.chip-role{font-size:9.5px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.chip-role .role-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7}
+.chip-cred{font-size:12px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace;transition:color .2s}
+.demo-chip:hover .chip-cred{color:var(--primary-l)}
+.chip-pw{font-size:10px;color:var(--text3);margin-top:2px}
+.chip-admin .chip-role{color:#ff9f43}
+.chip-accountant .chip-role{color:#fd79a8}
+.chip-officer .chip-role{color:var(--primary)}
+.chip-auditor .chip-role{color:#a29bfe}
+.chip-budget .chip-role{color:var(--green)}
+
+/* ── Footer ── */
+.form-footer{text-align:center;margin-top:18px}
+.security-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10.5px;color:var(--text3);
+  padding:5px 11px;background:rgba(46,204,113,.07);
+  border:1px solid rgba(46,204,113,.16);border-radius:20px;margin-bottom:8px;
+}
+.security-badge .dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:dotBlink 1.5s ease-in-out infinite}
+@keyframes dotBlink{0%,100%{opacity:1}50%{opacity:.3}}
+.footer-txt{font-size:10.5px;color:var(--text3);opacity:.65}
+
+/* ── Shake ── */
+@keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-7px)}30%{transform:translateX(7px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
+.shake{animation:shake .45s cubic-bezier(.36,.07,.19,.97) both!important}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .demo-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .login-card{padding:30px 22px 26px;border-radius:18px}
+  .demo-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:360px){
+  .login-card{padding:24px 16px 22px}
+  .form-title{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="grid-overlay"></div>
+
+<div class="login-card">
+
+  <!-- Branding strip -->
+  <div class="card-brand">
+    <div class="brand-ring">
+      <img src="/static/images/crest.png" alt="City of Harare Crest">
+    </div>
+    <div class="brand-text">
+      <div class="org">City of Harare</div>
+      <div class="dept">Financial Management System · v2.1</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div class="form-header">
+    <div class="form-title">Welcome <span>Back</span></div>
+    <div class="form-sub">Sign in to your account to continue</div>
+  </div>
+
+  <!-- Messages -->
+  <div class="msg-box error"   id="errMsg"     role="alert"></div>
+  <div class="msg-box success" id="successMsg" role="status"></div>
+  <div class="msg-box warning" id="warnMsg"    role="status"></div>
+
+  <!-- Form -->
+  <form id="loginForm" onsubmit="return doLogin(event)" novalidate>
+
+    <div class="fg" id="fgUsername">
+      <label for="username">Username</label>
+      <div class="input-wrap">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+        </svg>
+        <input type="text" id="username" placeholder="Enter your username"
+               autocomplete="username" required aria-label="Username"
+               oninput="onUsernameInput()" onblur="validateUsernameField()">
+      </div>
+      <div class="field-hint" id="userHint"></div>
+    </div>
+
+    <div class="fg" id="fgPassword">
+      <label for="password">Password</label>
+      <div class="input-wrap">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <input type="password" id="password" placeholder="Enter your password"
+               autocomplete="current-password" required aria-label="Password"
+               oninput="onPasswordInput()" onkeyup="detectCapslock(event)">
+        <button type="button" class="pwd-btn" id="pwdBtn"
+                aria-label="Toggle password visibility" onclick="togglePwd()">
+          <svg id="eyeIcon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="field-hint" id="pwdHint"></div>
+      <div class="capslock-warn" id="capslockWarn">⇪ Caps Lock is on</div>
+    </div>
+
+    <div class="check-row">
+      <div class="check-left">
+        <input type="checkbox" id="rememberMe" aria-label="Remember me">
+        <label for="rememberMe">Remember me</label>
+      </div>
+      <div class="forgot-link">
+        <a href="#" onclick="handleForgot(event)">Forgot password?</a>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-submit" id="loginBtn" aria-label="Sign in">
+      <div class="login-progress" id="loginProgress"></div>
+      <div class="btn-inner">
+        <div class="spin"></div>
+        <span class="btn-txt">Sign In →</span>
+        <svg class="success-check" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+    </button>
+
+  </form>
+
+  <!-- Demo credentials -->
+  <div class="demo-section">
+    <div class="demo-label">Demo Credentials</div>
+    <div class="demo-grid">
+      <div class="demo-chip chip-admin" onclick="fillCreds('admin','admin123')" role="button" tabindex="0">
+        <div class="chip-role"><span class="role-dot"></span>Administrator</div>
+        <div class="chip-cred">admin</div>
+        <div class="chip-pw">Full access · All modules</div>
+      </div>
+      <div class="demo-chip chip-accountant" onclick="fillCreds('t.muromba','password123')" role="button" tabindex="0">
+        <div class="chip-role"><span class="role-dot"></span>Accountant</div>
+        <div class="chip-cred">t.muromba</div>
+        <div class="chip-pw">Payments · Reconciliation · Reports</div>
+      </div>
+      <div class="demo-chip chip-officer" onclick="fillCreds('r.officer1','password123')" role="button" tabindex="0">
+        <div class="chip-role"><span class="role-dot"></span>Revenue Officer</div>
+        <div class="chip-cred">r.officer1</div>
+        <div class="chip-pw">Invoices · Payments</div>
+      </div>
+      <div class="demo-chip chip-auditor" onclick="fillCreds('auditor1','password123')" role="button" tabindex="0">
+        <div class="chip-role"><span class="role-dot"></span>Auditor</div>
+        <div class="chip-cred">auditor1</div>
+        <div class="chip-pw">Audit · Reports</div>
+      </div>
+      <div class="demo-chip chip-budget" onclick="fillCreds('budget1','password123')" role="button" tabindex="0">
+        <div class="chip-role"><span class="role-dot"></span>Budget Officer</div>
+        <div class="chip-cred">budget1</div>
+        <div class="chip-pw">Budget · Expenditure</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="form-footer">
+    <div class="security-badge">
+      <span class="dot"></span>
+      Encrypted · JWT auth · Session timeout
+    </div>
+    <div class="footer-txt">City of Harare © 2026 · Financial Management System</div>
+  </div>
+
+</div>
+
+<script>
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:8000'
+  : window.location.origin;
+
+/* Particle canvas */
+(function initCanvas() {
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+
+  function Particle() {
+    this.x = Math.random() * W; this.y = Math.random() * H;
+    this.r = Math.random() * 1.4 + 0.4;
+    this.vx = (Math.random() - 0.5) * 0.28; this.vy = (Math.random() - 0.5) * 0.28;
+    this.alpha = Math.random() * 0.45 + 0.1;
+    this.color = Math.random() > 0.6
+      ? `rgba(74,158,255,${this.alpha})`
+      : Math.random() > 0.5
+        ? `rgba(124,92,255,${this.alpha})`
+        : `rgba(255,255,255,${this.alpha * 0.5})`;
+  }
+  Particle.prototype.update = function() {
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < 0) this.x = W; if (this.x > W) this.x = 0;
+    if (this.y < 0) this.y = H; if (this.y > H) this.y = 0;
+  };
+
+  function initParticles(n) { particles = []; for (let i = 0; i < n; i++) particles.push(new Particle()); }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x, dy = particles[i].y - particles[j].y;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d < 120) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(74,158,255,${0.055 * (1 - d / 120)})`;
+          ctx.lineWidth = 0.6;
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    particles.forEach(p => { p.update(); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fillStyle = p.color; ctx.fill(); });
+    requestAnimationFrame(draw);
+  }
+
+  resize(); initParticles(70); draw();
+  window.addEventListener('resize', () => { resize(); initParticles(70); });
+})();
+
+/* Auto-redirect if already logged in */
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('fms_remember_me');
+  if (saved) {
+    document.getElementById('username').value = saved;
+    document.getElementById('rememberMe').checked = true;
+    validateUsernameField();
+  }
+  const token = localStorage.getItem('fms_token');
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 > Date.now()) window.location.href = '/static/pages/dashboard.html';
+    } catch(e) {}
+  }
+  document.querySelectorAll('.demo-chip').forEach(chip => {
+    chip.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chip.click(); } });
+  });
+});
+
+/* Password toggle */
+let pwdVisible = false;
+function togglePwd() {
+  pwdVisible = !pwdVisible;
+  document.getElementById('password').type = pwdVisible ? 'text' : 'password';
+  document.getElementById('eyeIcon').innerHTML = pwdVisible
+    ? `<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>`
+    : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+}
+
+/* Caps lock */
+function detectCapslock(e) {
+  const warn = document.getElementById('capslockWarn');
+  (e.getModifierState && e.getModifierState('CapsLock')) ? warn.classList.add('show') : warn.classList.remove('show');
+}
+
+/* Field validation */
+function onUsernameInput() { const i = document.getElementById('username'); i.classList.remove('has-error','valid'); document.getElementById('userHint').className = 'field-hint'; }
+function onPasswordInput()  { const i = document.getElementById('password');  i.classList.remove('has-error','valid'); document.getElementById('pwdHint').className  = 'field-hint'; }
+
+function validateUsernameField() {
+  const val = document.getElementById('username').value.trim();
+  const inp = document.getElementById('username'), hint = document.getElementById('userHint');
+  if (!val) return false;
+  if (val.length < 3) { inp.classList.add('has-error'); hint.textContent = 'Must be at least 3 characters'; hint.className = 'field-hint error'; return false; }
+  inp.classList.add('valid'); hint.className = 'field-hint'; return true;
+}
+function validatePasswordField() {
+  const val = document.getElementById('password').value;
+  const inp = document.getElementById('password'), hint = document.getElementById('pwdHint');
+  if (!val) { inp.classList.add('has-error'); hint.textContent = 'Password is required'; hint.className = 'field-hint error'; return false; }
+  inp.classList.add('valid'); hint.className = 'field-hint'; return true;
+}
+
+/* Messages */
+function showMsg(type, text) {
+  ['errMsg','successMsg','warnMsg'].forEach(id => { const el = document.getElementById(id); el.classList.remove('show'); el.textContent = ''; });
+  const map = { error:'errMsg', success:'successMsg', warning:'warnMsg' };
+  const el = document.getElementById(map[type] || 'errMsg');
+  el.textContent = text; el.classList.add('show');
+  if (type !== 'success') setTimeout(() => el.classList.remove('show'), 5000);
+}
+function shakeForm() { const f = document.getElementById('loginForm'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); }
+
+/* Demo fill */
+function fillCreds(u, p) {
+  const uI = document.getElementById('username'), pI = document.getElementById('password');
+  uI.value = u; pI.value = p;
+  uI.classList.remove('has-error'); uI.classList.add('valid');
+  pI.classList.remove('has-error'); pI.classList.add('valid');
+  document.getElementById('rememberMe').checked = false;
+  uI.focus();
+}
+
+/* Forgot */
+function handleForgot(e) {
+  e.preventDefault();
+  const u = document.getElementById('username').value.trim();
+  if (!u) { showMsg('warning', 'Enter your username first, then click Forgot password.'); return; }
+  showMsg('warning', `Password reset request noted for "${u}". Please contact your system administrator.`);
+}
+
+/* Login */
+async function doLogin(e) {
+  if (e) e.preventDefault();
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const btn = document.getElementById('loginBtn');
+
+  ['errMsg','successMsg','warnMsg'].forEach(id => document.getElementById(id).classList.remove('show'));
+
+  if (!validateUsernameField() | !validatePasswordField()) { shakeForm(); return false; }
+
+  btn.disabled = true; btn.classList.add('loading'); btn.classList.remove('done');
+  const bar = document.getElementById('loginProgress');
+  bar.style.width = '30%';
+  setTimeout(() => bar.style.width = '65%', 300);
+
+  try {
+    const form = new FormData();
+    form.append('username', u); form.append('password', p);
+    const res  = await fetch(API + '/api/auth/login', { method:'POST', body:form });
+    const data = await res.json();
+    bar.style.width = '100%';
+
+    if (!res.ok) {
+      bar.style.width = '0'; btn.disabled = false; btn.classList.remove('loading'); shakeForm();
+      const detail = data.detail || '';
+      if (detail.toLowerCase().includes('lock'))
+        showMsg('error', '🔒 Account temporarily locked. Try again in 30 minutes or contact your administrator.');
+      else if (detail.toLowerCase().includes('invalid') || detail.toLowerCase().includes('incorrect'))
+        showMsg('error', 'Incorrect username or password. Please try again.');
+      else
+        showMsg('error', detail || 'Login failed. Please try again.');
+      document.getElementById('password').value = '';
+      document.getElementById('password').classList.remove('valid');
+      return false;
+    }
+
+    localStorage.setItem('fms_token', data.access_token);
+    localStorage.setItem('fms_user', JSON.stringify(data.user || { username: u }));
+    document.getElementById('rememberMe').checked
+      ? localStorage.setItem('fms_remember_me', u)
+      : localStorage.removeItem('fms_remember_me');
+
+    btn.classList.remove('loading'); btn.classList.add('done');
+    showMsg('success', `Welcome back${data.user?.full_name ? ', ' + data.user.full_name.split(' ')[0] : ''}! Redirecting...`);
+    setTimeout(() => window.location.href = '/static/pages/dashboard.html', 900);
+
+  } catch(err) {
+    bar.style.width = '0'; btn.disabled = false; btn.classList.remove('loading'); shakeForm();
+    showMsg('error', 'Cannot reach the server. Please check your connection and try again.');
+  }
+  return false;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reports &amp; Data Entry — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Two-pane layout ───────────────────────────────────────── */
+.rpt-layout { display: flex; gap: 0; height: calc(100vh - 60px); overflow: hidden; }
+
+.rpt-nav {
+  width: 160px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.rpt-nav-section { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); padding: 8px 12px 3px; }
+.rpt-nav-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  font-size: 11.5px; color: var(--text2);
+  cursor: pointer; border: none; background: none;
+  text-align: left; width: 100%;
+  border-left: 2px solid transparent;
+  transition: all .12s;
+  font-family: 'DM Sans', sans-serif;
+}
+.rpt-nav-item:hover { background: var(--bg3); color: var(--text); }
+.rpt-nav-item.active { background: var(--primary-dim); color: var(--primary-light); border-left-color: var(--primary); font-weight: 500; }
+.rpt-nav-item .ni { width: 14px; text-align: center; font-size: 11px; }
+
+.rpt-content { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+/* ── Section header ────────────────────────────────────────── */
+.sec-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.sec-title { font-family: 'Crimson Pro', serif; font-size: 18px; font-weight: 700; }
+.sec-sub { font-size: 10.5px; color: var(--text2); margin-top: 1px; }
+.sec-actions { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+
+/* ── KPI row ───────────────────────────────────────────────── */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 8px; margin-bottom: 10px; }
+.kpi-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
+.kpi-label { font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); margin-bottom: 3px; }
+.kpi-value { font-family: 'Crimson Pro', serif; font-size: 16px; font-weight: 700; line-height: 1; }
+.kpi-meta  { font-size: 9px; color: var(--text2); margin-top: 2px; }
+
+/* ── Block card ────────────────────────────────────────────── */
+.block { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.block-head { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,.1); }
+.block-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); }
+.block-body { padding: 10px 12px; }
+
+/* ── Data-entry sub-tabs ───────────────────────────────────── */
+.sub-tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+.sub-tab { padding: 5px 12px; font-size: 11px; font-weight: 500; color: var(--text2); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; margin-bottom: -1px; font-family: 'DM Sans', sans-serif; transition: color .12s; }
+.sub-tab:hover { color: var(--text); }
+.sub-tab.active { color: var(--primary-light); border-bottom-color: var(--primary); }
+.sub-panel { display: none; } .sub-panel.active { display: block; }
+
+/* ── Form grid ─────────────────────────────────────────────── */
+.fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 8px; margin-bottom: 10px; }
+.fgrid .form-group { margin: 0; }
+.fgrid label { font-size: 9.5px; }
+.fgrid input, .fgrid select, .fgrid textarea { font-size: 11.5px; padding: 5px 8px; }
+.frow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* ── Report table ──────────────────────────────────────────── */
+.rtw { overflow-x: auto; }
+.rtw table { width: 100%; border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+.rtw th { background: var(--bg3); color: var(--text2); font-size: 8.5px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.rtw td { padding: 5px 8px; border-bottom: 1px solid rgba(42,51,71,.55); color: var(--text); font-size: 10.5px; }
+.rtw tbody tr:hover td { background: rgba(59,125,216,.05); }
+.rtw tr.total-row td { font-weight: 700; background: var(--bg3); border-top: 2px solid var(--border); }
+.variance-pos { color: var(--success); font-weight: 600; }
+.variance-neg { color: var(--danger); font-weight: 600; }
+
+/* ── Charts row ────────────────────────────────────────────── */
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.chart-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
+.chart-title { font-size: 8.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); margin-bottom: 6px; }
+
+/* ── Activity feed ─────────────────────────────────────────── */
+.activity-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(42,51,71,.5); }
+.activity-item:last-child { border-bottom: none; }
+.activity-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.activity-dot.create { background: var(--success); }
+.activity-dot.update { background: var(--warning); }
+.activity-dot.delete { background: var(--danger); }
+.activity-dot.login  { background: var(--primary-light); }
+.activity-dot.import { background: var(--gold); }
+.activity-dot.flag   { background: var(--danger); }
+.activity-meta { font-size: 10.5px; color: var(--text2); margin-top: 2px; }
+
+/* ── Progress bar inline ───────────────────────────────────── */
+.prog-wrap { display: flex; align-items: center; gap: 5px; }
+.prog-bar { flex: 1; background: var(--bg3); border-radius: 3px; height: 4px; overflow: hidden; min-width: 40px; }
+.prog-fill { height: 100%; border-radius: 3px; }
+
+/* ── Upload zone ───────────────────────────────────────────── */
+.upload-zone { background: var(--bg3); border: 2px dashed var(--border); border-radius: 6px; padding: 16px; text-align: center; }
+.upload-zone:hover { border-color: var(--primary); }
+.upload-icon { font-size: 22px; margin-bottom: 4px; }
+.upload-title { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
+.upload-hint  { font-size: 10px; color: var(--text2); margin-bottom: 10px; }
+
+/* ── Rate pill ─────────────────────────────────────────────── */
+.rate-pill {
+  display: inline-block; padding: 1px 6px; border-radius: 10px;
+  font-size: 9px; font-weight: 600;
+}
+.rate-good { background: var(--success-dim); color: var(--success); }
+.rate-mid  { background: var(--warning-dim); color: var(--warning); }
+.rate-low  { background: var(--danger-dim);  color: var(--danger); }
+
+/* ── Panel pages ───────────────────────────────────────────── */
+.rpt-panel { display: none; } .rpt-panel.active { display: block; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Reports &amp; Data Entry</span>
+      <div class="topbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="importCOHDataset()" title="Import City of Harare official financial dataset (2021-2025)">📥 Load COH Data</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/full-backup?format=xlsx','fms_full_backup.xlsx')">⬇ Full Backup Excel</button>
+      </div>
+    </div>
+
+    <div class="rpt-layout">
+      <!-- ── Left nav ─────────────────────────────────── -->
+      <nav class="rpt-nav">
+        <div class="rpt-nav-section">Overview</div>
+        <button class="rpt-nav-item active" data-panel="overview" onclick="showPanel('overview',this)"><span class="ni">📊</span>System Overview</button>
+        <button class="rpt-nav-item" data-panel="activity" onclick="showPanel('activity',this)"><span class="ni">⚡</span>Activity Feed</button>
+
+        <div class="rpt-nav-section">Add New Data</div>
+        <button class="rpt-nav-item" data-panel="entry" onclick="showPanel('entry',this)"><span class="ni">✚</span>Data Entry</button>
+
+        <div class="rpt-nav-section">Revenue</div>
+        <button class="rpt-nav-item" data-panel="perf" onclick="showPanel('perf',this)"><span class="ni">🎯</span>Performance</button>
+        <button class="rpt-nav-item" data-panel="financial" onclick="showPanel('financial',this)"><span class="ni">💰</span>Financial Summary</button>
+        <button class="rpt-nav-item" data-panel="trend" onclick="showPanel('trend',this)"><span class="ni">📈</span>Collection Trend</button>
+        <button class="rpt-nav-item" data-panel="officer" onclick="showPanel('officer',this)"><span class="ni">👤</span>Officer Performance</button>
+
+        <div class="rpt-nav-section">Expenditure</div>
+        <button class="rpt-nav-item" data-panel="variance" onclick="showPanel('variance',this)"><span class="ni">📋</span>Budget Variance</button>
+        <button class="rpt-nav-item" data-panel="cashflow" onclick="showPanel('cashflow',this)"><span class="ni">🔄</span>Cashflow Forecast</button>
+
+        <div class="rpt-nav-section">Settings</div>
+        <button class="rpt-nav-item" data-panel="budgets" onclick="showPanel('budgets',this)"><span class="ni">🏛</span>Budgets</button>
+        <button class="rpt-nav-item" data-panel="targets" onclick="showPanel('targets',this)"><span class="ni">🎯</span>Revenue Targets</button>
+        <button class="rpt-nav-item" data-panel="audit" onclick="showPanel('audit',this)"><span class="ni">🔍</span>Audit Trail</button>
+      </nav>
+
+      <!-- ── Right content ────────────────────────────── -->
+      <div class="rpt-content">
+
+        <!-- ═══════════════════ OVERVIEW ═══════════════════ -->
+        <div class="rpt-panel active" id="panel-overview">
+          <div class="sec-hdr">
+            <div><div class="sec-title">System Overview</div><div class="sec-sub">Consolidated snapshot of all financial activity across the system.</div></div>
+            <div class="sec-actions"><button class="btn btn-primary btn-sm" onclick="loadOverview()">↻ Refresh</button></div>
+          </div>
+
+          <div class="kpi-row" id="ov-kpis">
+            <div class="kpi-card"><div class="kpi-label">Total Billed</div><div class="kpi-value" id="ov-billed">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Total Collected</div><div class="kpi-value text-success" id="ov-collected">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Outstanding AR</div><div class="kpi-value text-danger" id="ov-outstanding">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Collection Rate</div><div class="kpi-value" id="ov-rate">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Total Expenditure</div><div class="kpi-value text-warning" id="ov-expend">—</div></div>
+            <div class="kpi-card"><div class="kpi-label">Active Ratepayers</div><div class="kpi-value" id="ov-rp">—</div></div>
+          </div>
+
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Revenue by Category</span>
+                <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('ovCatChart','revenue_by_category.png')">⬇ PNG</button>
+              </div>
+              <canvas id="ovCatChart" height="120"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Monthly Collections (Last 6 Months)</span>
+                <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('ovTrendChart','monthly_trend.png')">⬇ PNG</button>
+              </div>
+              <canvas id="ovTrendChart" height="120"></canvas>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="block">
+              <div class="block-head"><span class="block-title">Recent Invoices</span><a class="btn btn-secondary btn-sm" href="invoices.html">View All</a></div>
+              <div class="block-body rtw" id="ov-invoices"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
+            </div>
+            <div class="block">
+              <div class="block-head"><span class="block-title">Recent Payments</span><a class="btn btn-secondary btn-sm" href="payments.html">View All</a></div>
+              <div class="block-body rtw" id="ov-payments"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+            <div class="block">
+              <div class="block-head"><span class="block-title">Recent Expenditures</span><a class="btn btn-secondary btn-sm" href="expenditures.html">View All</a></div>
+              <div class="block-body rtw" id="ov-expenditures"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
+            </div>
+            <div class="block">
+              <div class="block-head"><span class="block-title">Leakage Alerts</span><a class="btn btn-secondary btn-sm" href="leakage.html">View All</a></div>
+              <div class="block-body" id="ov-alerts"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ ACTIVITY FEED ══════════════ -->
+        <div class="rpt-panel" id="panel-activity">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Activity Feed</div><div class="sec-sub">Live stream of all user actions and system events across every module.</div></div>
+            <div class="sec-actions">
+              <input type="date" id="af-from" style="padding:5px 8px;font-size:12px;width:130px">
+              <input type="date" id="af-to"   style="padding:5px 8px;font-size:12px;width:130px">
+              <button class="btn btn-primary btn-sm" onclick="loadActivity()">↻ Refresh</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportAudit('csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportAudit('xlsx')">⬇ Excel</button>
+            </div>
+          </div>
+          <div class="block">
+            <div class="block-head">
+              <span class="block-title" id="af-count">All System Events</span>
+              <select id="af-action" onchange="loadActivity()" style="padding:4px 8px;font-size:11.5px;width:auto">
+                <option value="">All Actions</option>
+                <option>LOGIN</option><option>CREATE</option><option>UPDATE</option>
+                <option>DELETE</option><option>IMPORT</option><option>FLAG</option>
+              </select>
+            </div>
+            <div class="block-body" id="af-feed" style="max-height:calc(100vh - 220px);overflow-y:auto">
+              <div class="text-muted text-center" style="padding:24px;font-size:12px">Click Refresh to load</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ DATA ENTRY ═════════════════ -->
+        <div class="rpt-panel" id="panel-entry">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Add New Data</div><div class="sec-sub">Create records across all modules — ratepayers, invoices, payments, and expenditures.</div></div>
+          </div>
+
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="switchSub('entry','ratepayer',this)">Ratepayer</button>
+            <button class="sub-tab" onclick="switchSub('entry','invoice',this)">Invoice</button>
+            <button class="sub-tab" onclick="switchSub('entry','payment',this)">Payment</button>
+            <button class="sub-tab" onclick="switchSub('entry','expenditure',this)">Expenditure</button>
+            <button class="sub-tab" onclick="switchSub('entry','bulk',this)">Bulk Import</button>
+          </div>
+
+          <!-- Ratepayer -->
+          <div class="sub-panel active" id="entry-ratepayer">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Ratepayer</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Full Name *</label><input id="rp_name" placeholder="e.g. John Doe"></div>
+                  <div class="form-group"><label>Account Number *</label><input id="rp_acc" placeholder="e.g. HAR-001234"></div>
+                  <div class="form-group"><label>Property Address *</label><input id="rp_addr" placeholder="Street address"></div>
+                  <div class="form-group"><label>Zone</label>
+                    <select id="rp_zone">
+                      <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
+                      <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
+                      <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+                    </select>
+                  </div>
+                  <div class="form-group"><label>Phone</label><input id="rp_phone" placeholder="+263…"></div>
+                  <div class="form-group"><label>Email</label><input id="rp_email" type="email" placeholder="email@example.com"></div>
+                  <div class="form-group"><label>Property Type</label>
+                    <select id="rp_type"><option value="residential">Residential</option><option value="commercial">Commercial</option><option value="industrial">Industrial</option></select>
+                  </div>
+                  <div class="form-group"><label>Rate Category</label>
+                    <select id="rp_rcat"><option value="standard">Standard</option><option value="indigent">Indigent</option><option value="business">Business</option></select>
+                  </div>
+                </div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="saveRatepayer()">Save Ratepayer</button>
+                  <a class="btn btn-secondary" href="ratepayers.html">View All Ratepayers</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Invoice -->
+          <div class="sub-panel" id="entry-invoice">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Invoice</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Ratepayer Account *</label><input id="inv_acc" placeholder="Account number or search" oninput="searchRatepayerFor('inv')"></div>
+                  <div class="form-group"><label>Invoice Number *</label><input id="inv_num" placeholder="e.g. INV-2025-001"></div>
+                  <div class="form-group"><label>Revenue Category *</label>
+                    <select id="inv_cat">
+                      <option value="rates">Rates</option><option value="water">Water</option><option value="sewerage">Sewerage</option>
+                      <option value="refuse">Refuse</option><option value="licensing">Licensing</option><option value="parking">Parking</option><option value="rentals">Rentals</option><option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group"><label>Amount (USD) *</label><input id="inv_amt" type="number" step="0.01" placeholder="0.00"></div>
+                  <div class="form-group"><label>Issue Date *</label><input id="inv_date" type="date"></div>
+                  <div class="form-group"><label>Due Date *</label><input id="inv_due" type="date"></div>
+                  <div class="form-group"><label>Period</label><input id="inv_period" placeholder="e.g. Jan 2025"></div>
+                </div>
+                <div class="form-group" style="max-width:500px"><label>Description</label><input id="inv_desc" placeholder="Brief description"></div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
+                  <a class="btn btn-secondary" href="invoices.html">View All Invoices</a>
+                </div>
+                <div id="inv_rp_info" style="margin-top:8px;font-size:11.5px;color:var(--text2)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment -->
+          <div class="sub-panel" id="entry-payment">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Payment</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Ratepayer Account *</label><input id="pmt_acc" placeholder="Account number" oninput="searchRatepayerFor('pmt')"></div>
+                  <div class="form-group"><label>Payment Reference *</label><input id="pmt_ref" placeholder="e.g. PMT-2025-001"></div>
+                  <div class="form-group"><label>Amount (USD) *</label><input id="pmt_amt" type="number" step="0.01" placeholder="0.00"></div>
+                  <div class="form-group"><label>Payment Date *</label><input id="pmt_date" type="date"></div>
+                  <div class="form-group"><label>Method</label>
+                    <select id="pmt_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="mobile_money">Mobile Money</option><option value="cheque">Cheque</option></select>
+                  </div>
+                  <div class="form-group"><label>Revenue Category</label>
+                    <select id="pmt_cat">
+                      <option value="rates">Rates</option><option value="water">Water</option><option value="sewerage">Sewerage</option>
+                      <option value="refuse">Refuse</option><option value="licensing">Licensing</option><option value="parking">Parking</option><option value="rentals">Rentals</option><option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group" style="max-width:400px"><label>Notes</label><input id="pmt_notes" placeholder="Optional notes"></div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="savePayment()">Save Payment</button>
+                  <a class="btn btn-secondary" href="payments.html">View All Payments</a>
+                </div>
+                <div id="pmt_rp_info" style="margin-top:8px;font-size:11.5px;color:var(--text2)"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expenditure -->
+          <div class="sub-panel" id="entry-expenditure">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Expenditure</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Reference Number *</label><input id="exp_ref" placeholder="e.g. EXP-2025-001"></div>
+                  <div class="form-group"><label>Department *</label>
+                    <select id="exp_dept">
+                      <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
+                      <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+                    </select>
+                  </div>
+                  <div class="form-group"><label>Amount (USD) *</label><input id="exp_amt" type="number" step="0.01" placeholder="0.00"></div>
+                  <div class="form-group"><label>Date *</label><input id="exp_date" type="date"></div>
+                  <div class="form-group"><label>Budget Line</label><input id="exp_bline" placeholder="e.g. Staff Costs"></div>
+                  <div class="form-group"><label>Supplier</label><input id="exp_supplier" placeholder="Supplier or contractor name"></div>
+                </div>
+                <div class="form-group" style="max-width:500px"><label>Description *</label><input id="exp_desc" placeholder="What this expenditure is for"></div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="saveExpenditure()">Save Expenditure</button>
+                  <a class="btn btn-secondary" href="expenditures.html">View All Expenditures</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bulk Import -->
+          <div class="sub-panel" id="entry-bulk">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+              <div class="block">
+                <div class="block-head"><span class="block-title">Import Ratepayers</span></div>
+                <div class="block-body">
+                  <div class="upload-zone" onclick="document.getElementById('fi-rp').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-title">Drop CSV / Excel or click</div>
+                    <div class="upload-hint">Columns: account_number, full_name, address, zone, phone, email, property_type</div>
+                  </div>
+                  <input type="file" id="fi-rp" accept=".csv,.xlsx" style="display:none" onchange="uploadFile('/api/import/ratepayers',this,'fi-rp-result')">
+                  <div id="fi-rp-result" style="margin-top:8px;font-size:12px"></div>
+                  <div class="frow" style="margin-top:8px;gap:6px">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/templates/ratepayers?format=xlsx','template_ratepayers.xlsx')">📋 Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="block">
+                <div class="block-head"><span class="block-title">Import Invoices</span></div>
+                <div class="block-body">
+                  <div class="upload-zone" onclick="document.getElementById('fi-inv').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-title">Drop CSV / Excel or click</div>
+                    <div class="upload-hint">Columns: account_number, invoice_number, category, amount, issue_date, due_date</div>
+                  </div>
+                  <input type="file" id="fi-inv" accept=".csv,.xlsx" style="display:none" onchange="uploadFile('/api/import/invoices',this,'fi-inv-result')">
+                  <div id="fi-inv-result" style="margin-top:8px;font-size:12px"></div>
+                  <div class="frow" style="margin-top:8px;gap:6px">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/templates/invoices?format=xlsx','template_invoices.xlsx')">📋 Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="block">
+                <div class="block-head"><span class="block-title">Import Budgets</span></div>
+                <div class="block-body">
+                  <div class="upload-zone" onclick="document.getElementById('fi-bud').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-title">Drop CSV / Excel or click</div>
+                    <div class="upload-hint">Columns: fiscal_year, department, category, allocated_amount, spent_amount</div>
+                  </div>
+                  <input type="file" id="fi-bud" accept=".csv,.xlsx" style="display:none" onchange="uploadFile('/api/import/budgets',this,'fi-bud-result')">
+                  <div id="fi-bud-result" style="margin-top:8px;font-size:12px"></div>
+                  <div class="frow" style="margin-top:8px;gap:6px">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/templates/budgets?format=xlsx','template_budgets.xlsx')">📋 Template</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="block">
+                <div class="block-head"><span class="block-title">Import Revenue Targets</span></div>
+                <div class="block-body">
+                  <div class="upload-zone" onclick="document.getElementById('fi-tgt').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-title">Drop CSV / Excel or click</div>
+                    <div class="upload-hint">Columns: fiscal_year, category, target_amount, period, notes</div>
+                  </div>
+                  <input type="file" id="fi-tgt" accept=".csv,.xlsx" style="display:none" onchange="uploadFile('/api/import/revenue-targets',this,'fi-tgt-result')">
+                  <div id="fi-tgt-result" style="margin-top:8px;font-size:12px"></div>
+                  <div class="frow" style="margin-top:8px;gap:6px">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/templates/revenue-targets?format=xlsx','template_revenue_targets.xlsx')">📋 Template</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ REVENUE PERFORMANCE ════════ -->
+        <div class="rpt-panel" id="panel-perf">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Revenue Performance</div><div class="sec-sub">Actual collections vs. set targets by category and fiscal year.</div></div>
+            <div class="sec-actions">
+              <input id="perf-fy" placeholder="Fiscal Year" style="padding:5px 8px;font-size:12px;width:120px">
+              <button class="btn btn-primary btn-sm" onclick="loadPerf()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportRpt('/api/reports/performance','performance',perf_fy)">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportRpt('/api/reports/performance','performance',perf_fy,'xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Revenue Performance','perf-tbody','performance_report.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="kpi-row" id="perf-kpis" style="display:none"></div>
+          <div class="chart-row" id="perf-charts" style="display:none">
+            <div class="chart-card"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center"><span>Target vs Collected vs Billed</span><button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('perfBarChart','performance_bar.png')">⬇ PNG</button></div><canvas id="perfBarChart" height="120"></canvas></div>
+            <div class="chart-card"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center"><span>Collected by Category</span><button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('perfPieChart','performance_pie.png')">⬇ PNG</button></div><canvas id="perfPieChart" height="120"></canvas></div>
+          </div>
+          <div class="block" id="perf-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Revenue Performance Detail</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr>
+                <th>Category</th><th>Target</th><th>Billed</th><th>Collected</th>
+                <th>Outstanding</th><th>Rate</th><th>Variance</th><th>Var %</th><th>Status</th>
+              </tr></thead>
+              <tbody id="perf-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ FINANCIAL SUMMARY ══════════ -->
+        <div class="rpt-panel" id="panel-financial">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Financial Summary</div><div class="sec-sub">Revenue collection performance by category — billed, collected, outstanding, and rates.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-primary btn-sm" onclick="loadFinancial()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/financial-summary?format=csv','financial_summary.csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/financial-summary?format=xlsx','financial_summary.xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Financial Summary','fin-tbody','financial_summary.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="kpi-row" id="fin-kpis" style="display:none"></div>
+          <div class="chart-row" id="fin-charts" style="display:none">
+            <div class="chart-card"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center"><span>Billed vs Collected by Category</span><button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('finBarChart','financial_summary_bar.png')">⬇ PNG</button></div><canvas id="finBarChart" height="120"></canvas></div>
+            <div class="chart-card"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center"><span>Collected vs Outstanding</span><button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:10px" onclick="downloadChartAsPNG('finPieChart','collected_outstanding.png')">⬇ PNG</button></div><canvas id="finPieChart" height="120"></canvas></div>
+          </div>
+          <div class="block" id="fin-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Collection by Category</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr>
+                <th>Category</th><th>Invoices</th><th>Billed</th><th>Collected</th><th>Outstanding</th><th>Collection Rate</th>
+              </tr></thead>
+              <tbody id="fin-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ COLLECTION TREND ═══════════ -->
+        <div class="rpt-panel" id="panel-trend">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Collection Rate Trend</div><div class="sec-sub">Month-by-month collection rate trend showing revenue recovery performance over time.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-primary btn-sm" onclick="loadTrend()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/collection-rate-trend?format=csv','collection_trend.csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Collection Rate Trend','trend-tbody','collection_trend.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="block">
+            <div class="block-head"><span class="block-title">Monthly Collection Trend</span></div>
+            <div class="block-body">
+              <canvas id="trendChart" height="140"></canvas>
+            </div>
+          </div>
+          <div class="block" id="trend-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Trend Data</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr><th>Month</th><th>Billed</th><th>Collected</th><th>Outstanding</th><th>Collection Rate</th></tr></thead>
+              <tbody id="trend-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ OFFICER PERFORMANCE ════════ -->
+        <div class="rpt-panel" id="panel-officer">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Officer Performance</div><div class="sec-sub">Revenue officer collection targets, actual performance, and ranking.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-primary btn-sm" onclick="loadOfficer()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/officer-performance?format=csv','officer_performance.csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/officer-performance?format=xlsx','officer_performance.xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Officer Performance','off-tbody','officer_performance.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="kpi-row" id="off-kpis" style="display:none"></div>
+          <div class="block" id="off-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Officer Collection Performance</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr>
+                <th>Rank</th><th>Officer</th><th>Invoices</th><th>Billed</th>
+                <th>Collected</th><th>Outstanding</th><th>Rate</th><th>Performance</th>
+              </tr></thead>
+              <tbody id="off-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ BUDGET VARIANCE ════════════ -->
+        <div class="rpt-panel" id="panel-variance">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Budget Variance</div><div class="sec-sub">Allocated budget vs actual approved expenditures by department. Highlights over- and under-utilised areas.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-primary btn-sm" onclick="loadVariance()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=csv','budget_variance.csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=xlsx','budget_variance.xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Budget Variance','var-tbody','budget_variance.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="kpi-row" id="var-kpis" style="display:none"></div>
+          <div class="block" id="var-chart-block" style="display:none">
+            <div class="block-head"><span class="block-title">Allocated vs Spent by Department</span></div>
+            <div class="block-body"><canvas id="varChart" height="120"></canvas></div>
+          </div>
+          <div class="block" id="var-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Budget Variance Detail</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr>
+                <th>Department</th><th>Fiscal Year</th><th>Category</th>
+                <th>Allocated</th><th>Spent</th><th>Variance</th><th>Var %</th><th>Status</th>
+              </tr></thead>
+              <tbody id="var-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ CASHFLOW FORECAST ══════════ -->
+        <div class="rpt-panel" id="panel-cashflow">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Cashflow Forecast</div><div class="sec-sub">Projected inflows and outflows based on outstanding invoices and pending expenditures.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-primary btn-sm" onclick="loadCashflow()">Generate</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/cashflow-forecast?format=csv','cashflow_forecast.csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/cashflow-forecast?format=xlsx','cashflow_forecast.xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Cashflow Forecast','cf-tbody','cashflow_forecast.pdf')">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="kpi-row" id="cf-kpis" style="display:none"></div>
+          <div class="block" id="cf-chart-block" style="display:none">
+            <div class="block-head"><span class="block-title">Projected Cashflow</span></div>
+            <div class="block-body"><canvas id="cfChart" height="140"></canvas></div>
+          </div>
+          <div class="block" id="cf-table-block" style="display:none">
+            <div class="block-head"><span class="block-title">Cashflow Forecast Detail</span></div>
+            <div class="block-body rtw">
+              <table><thead><tr>
+                <th>Period</th><th>Expected Inflow</th><th>Expected Outflow</th><th>Net Position</th><th>Cumulative</th>
+              </tr></thead>
+              <tbody id="cf-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ BUDGETS ═════════════════════ -->
+        <div class="rpt-panel" id="panel-budgets">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Budget Allocations</div><div class="sec-sub">Enter and manage departmental budget allocations by fiscal year.</div></div>
+          </div>
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="switchSub('bud','manual',this)">Manual Entry</button>
+            <button class="sub-tab" onclick="switchSub('bud','view',this)">View All Budgets</button>
+          </div>
+          <div class="sub-panel active" id="bud-manual">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Budget Entry</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Fiscal Year *</label><input id="b_fy" placeholder="e.g. 2025/2026"></div>
+                  <div class="form-group"><label>Department *</label>
+                    <select id="b_dept"><option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option><option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option></select>
+                  </div>
+                  <div class="form-group"><label>Category</label><input id="b_cat" placeholder="e.g. Operational"></div>
+                  <div class="form-group"><label>Allocated (USD) *</label><input id="b_alloc" type="number" step="0.01" placeholder="0.00"></div>
+                  <div class="form-group"><label>Spent to Date (USD)</label><input id="b_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
+                </div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="saveBudgetEntry()">Save Budget</button>
+                  <button class="btn btn-secondary" onclick="switchSub('bud','view',null);loadBudgetView()">View All</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="sub-panel" id="bud-view">
+            <div class="block">
+              <div class="block-head">
+                <span class="block-title" id="bud-view-count">Budget Entries</span>
+                <div class="frow" style="gap:6px">
+                  <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=csv','budget_variance.csv')">⬇ CSV</button>
+                  <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/budget-variance?format=xlsx','budget_variance.xlsx')">⬇ Excel</button>
+                  <button class="btn btn-secondary btn-sm" onclick="loadBudgetView()">↻ Refresh</button>
+                </div>
+              </div>
+              <div class="block-body rtw" style="max-height:420px;overflow-y:auto">
+                <table><thead><tr><th>Department</th><th>Fiscal Year</th><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th></th></tr></thead>
+                <tbody id="bud-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:20px">Click Refresh to load</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ REVENUE TARGETS ════════════ -->
+        <div class="rpt-panel" id="panel-targets">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Revenue Targets</div><div class="sec-sub">Set planned revenue amounts by category and fiscal year for performance benchmarking.</div></div>
+          </div>
+          <div class="sub-tabs">
+            <button class="sub-tab active" onclick="switchSub('tgt','manual',this)">Manual Entry</button>
+            <button class="sub-tab" onclick="switchSub('tgt','view',this)">View All Targets</button>
+          </div>
+          <div class="sub-panel active" id="tgt-manual">
+            <div class="block">
+              <div class="block-head"><span class="block-title">New Revenue Target</span></div>
+              <div class="block-body">
+                <div class="fgrid">
+                  <div class="form-group"><label>Fiscal Year *</label><input id="t_fy" placeholder="e.g. 2025/2026"></div>
+                  <div class="form-group"><label>Revenue Category *</label>
+                    <select id="t_cat"><option value="rates">Rates</option><option value="water">Water</option><option value="sewerage">Sewerage</option><option value="refuse">Refuse</option><option value="licensing">Licensing</option><option value="parking">Parking</option><option value="rentals">Rentals</option><option value="other">Other</option></select>
+                  </div>
+                  <div class="form-group"><label>Target Amount (USD) *</label><input id="t_amount" type="number" step="0.01" placeholder="0.00"></div>
+                  <div class="form-group"><label>Period</label>
+                    <select id="t_period"><option value="annual">Annual</option><option value="Q1">Q1 (Jul–Sep)</option><option value="Q2">Q2 (Oct–Dec)</option><option value="Q3">Q3 (Jan–Mar)</option><option value="Q4">Q4 (Apr–Jun)</option></select>
+                  </div>
+                  <div class="form-group"><label>Notes</label><input id="t_notes" placeholder="Optional notes"></div>
+                </div>
+                <div class="frow">
+                  <button class="btn btn-primary" onclick="saveTargetEntry()">Save Target</button>
+                  <button class="btn btn-secondary" onclick="switchSub('tgt','view',null);loadTargetView()">View All</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="sub-panel" id="tgt-view">
+            <div class="block">
+              <div class="block-head">
+                <span class="block-title">Revenue Targets</span>
+                <div class="frow" style="gap:6px">
+                  <input id="tgt-fy-filter" placeholder="Fiscal year filter" style="padding:4px 8px;font-size:11.5px;width:130px">
+                  <button class="btn btn-secondary btn-sm" onclick="loadTargetView()">↻ Refresh</button>
+                </div>
+              </div>
+              <div class="block-body rtw" style="max-height:420px;overflow-y:auto">
+                <table><thead><tr><th>Fiscal Year</th><th>Category</th><th>Period</th><th>Target</th><th>Notes</th><th></th></tr></thead>
+                <tbody id="tgt-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:20px">Click Refresh to load</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ AUDIT TRAIL ═════════════════ -->
+        <div class="rpt-panel" id="panel-audit">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Audit Trail</div><div class="sec-sub">Complete record of all system actions, filtered by date range and action type.</div></div>
+            <div class="sec-actions">
+              <input type="date" id="aud-from" style="padding:5px 8px;font-size:12px;width:130px">
+              <input type="date" id="aud-to"   style="padding:5px 8px;font-size:12px;width:130px">
+              <button class="btn btn-primary btn-sm" onclick="loadAuditPage()">Preview</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportAuditPage('csv')">⬇ CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportAuditPage('xlsx')">⬇ Excel</button>
+            </div>
+          </div>
+          <div class="block">
+            <div class="block-head"><span class="block-title" id="aud-count">Audit Records</span></div>
+            <div class="block-body rtw" style="max-height:calc(100vh - 220px);overflow-y:auto">
+              <table><thead><tr><th>#</th><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>Timestamp</th></tr></thead>
+              <tbody id="aud-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:24px">Click Preview to load</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /rpt-content -->
+    </div><!-- /rpt-layout -->
+  </div><!-- /main-content -->
+</div><!-- /app-layout -->
+
+<!-- Edit Budget Modal -->
+<div class="modal-overlay" id="editBudgetModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header"><span class="modal-title" id="eb-title">Edit Budget</span><button class="modal-close" onclick="closeModal('editBudgetModal')">×</button></div>
+    <input type="hidden" id="eb_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Allocated Amount (USD)</label><input id="eb_alloc" type="number" step="0.01"></div>
+      <div class="form-group"><label>Spent Amount (USD)</label><input id="eb_spent" type="number" step="0.01"></div>
+    </div>
+    <div class="form-group"><label>Category</label><input id="eb_cat"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editBudgetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBudgetEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Target Modal -->
+<div class="modal-overlay" id="editTargetModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><span class="modal-title" id="et-title">Edit Target</span><button class="modal-close" onclick="closeModal('editTargetModal')">×</button></div>
+    <input type="hidden" id="et_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Target Amount (USD)</label><input id="et_amount" type="number" step="0.01"></div>
+      <div class="form-group"><label>Period</label>
+        <select id="et_period"><option value="annual">Annual</option><option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option></select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notes</label><input id="et_notes"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editTargetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTargetEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('reports');
+
+const user = getUser();
+const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
+
+// ── Chart instances ────────────────────────────────────────────────────────────
+let charts = {};
+function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+function mkChart(id, cfg) { destroyChart(id); charts[id] = new Chart(document.getElementById(id), cfg); return charts[id]; }
+
+// ── Panel navigation ──────────────────────────────────────────────────────────
+function showPanel(name, btn) {
+  document.querySelectorAll('.rpt-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.rpt-nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+  // Auto-load on first visit
+  if (!btn.dataset.loaded) {
+    btn.dataset.loaded = '1';
+    const autoLoad = { overview: loadOverview, activity: loadActivity, trend: loadTrend };
+    if (autoLoad[name]) autoLoad[name]();
+  }
+}
+
+function switchSub(group, name, btn) {
+  document.querySelectorAll(`[id^="${group}-"]`).forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sub-tab').forEach(b => {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(`'${group}'`)) b.classList.remove('active');
+  });
+  document.getElementById(`${group}-${name}`)?.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function show(id) { $(id).style.display = ''; }
+function mkKpis(containerId, items) {
+  $(containerId).innerHTML = items.map(([label, value, cls]) =>
+    `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value ${cls||''}">${value}</div></div>`
+  ).join('');
+  show(containerId);
+}
+function ratePill(r) {
+  const cls = r >= 80 ? 'rate-good' : r >= 50 ? 'rate-mid' : 'rate-low';
+  return `<span class="rate-pill ${cls}">${r}%</span>`;
+}
+function progBar(pct, color) {
+  const c = color || (pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)');
+  return `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(pct,100)}%;background:${c}"></div></div><span style="font-size:11px;min-width:34px">${pct}%</span></div>`;
+}
+
+async function uploadFile(url, input, resultId) {
+  const file = input.files[0]; if (!file) return;
+  try {
+    const res = await uploadImport(url, file);
+    $(resultId).innerHTML = `<span style="color:var(--success)">✅ ${res.message}</span>` +
+      (res.errors?.length ? `<br><span style="color:var(--warning)">⚠ ${res.errors.length} warning(s)</span>` : '');
+    toast(res.message, 'success');
+  } catch(e) { $(resultId).innerHTML = `<span style="color:var(--danger)">❌ ${e.message}</span>`; toast(e.message,'error'); }
+  input.value = '';
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const [summary, catData, trendData, alerts, invoices, payments, expends] = await Promise.all([
+      apiFetch('/api/dashboard/summary'),
+      apiFetch('/api/dashboard/revenue-by-category'),
+      apiFetch('/api/dashboard/monthly-trend'),
+      apiFetch('/api/dashboard/alerts'),
+      apiFetch('/api/invoices?limit=5&sort=created_at&order=desc').catch(()=>({items:[]})),
+      apiFetch('/api/payments?limit=5&sort=payment_date&order=desc').catch(()=>({items:[]})),
+      apiFetch('/api/expenditures?limit=5').catch(()=>({items:[]})),
+    ]);
+
+    $('ov-billed').textContent      = fmtMoney(summary.total_billed || 0);
+    $('ov-collected').textContent   = fmtMoney(summary.total_collected || 0);
+    $('ov-outstanding').textContent = fmtMoney(summary.total_outstanding || 0);
+    $('ov-rate').textContent        = (summary.collection_rate || 0) + '%';
+    $('ov-expend').textContent      = fmtMoney(summary.total_expenditure || 0);
+    $('ov-rp').textContent          = (summary.active_ratepayers || 0).toLocaleString();
+
+    // Category chart
+    if (catData?.length) {
+      mkChart('ovCatChart', {
+        type: 'bar',
+        data: { labels: catData.map(r => r.category), datasets: [
+          { label:'Billed',    data: catData.map(r => r.billed),    backgroundColor:'rgba(59,125,216,0.6)' },
+          { label:'Collected', data: catData.map(r => r.collected), backgroundColor:'rgba(39,174,96,0.6)' },
+        ]},
+        options:{ responsive:true, plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}}, scales:{y:{beginAtZero:true,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}},x:{ticks:{font:{size:9}}}}}
+      });
+    }
+
+    // Trend chart
+    if (trendData?.length) {
+      mkChart('ovTrendChart', {
+        type: 'line',
+        data: { labels: trendData.map(r => r.month), datasets: [
+          { label:'Collected', data:trendData.map(r=>r.collected), borderColor:'var(--success)', backgroundColor:'rgba(39,174,96,0.1)', tension:.3, fill:true },
+          { label:'Billed',    data:trendData.map(r=>r.billed),    borderColor:'var(--primary)', backgroundColor:'transparent', tension:.3, borderDash:[4,3] },
+        ]},
+        options:{ responsive:true, plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}}, scales:{y:{beginAtZero:true,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}},x:{ticks:{font:{size:9}}}}}
+      });
+    }
+
+    // Recent invoices
+    const invItems = invoices.items || invoices || [];
+    $('ov-invoices').innerHTML = invItems.length === 0
+      ? '<div class="text-muted text-center" style="padding:12px;font-size:12px">No invoices</div>'
+      : `<table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="border-bottom:1px solid var(--border)"><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Invoice</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Amount</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Status</th></tr></thead>
+          <tbody>${invItems.slice(0,5).map(i=>`<tr style="border-bottom:1px solid rgba(42,51,71,.4)">
+            <td style="padding:5px 8px;color:var(--primary-light);font-size:10.5px">${i.invoice_number||i.id}</td>
+            <td style="padding:5px 8px">${fmtMoney(i.amount||0)}</td>
+            <td style="padding:5px 8px"><span class="badge badge-${i.status==='paid'?'paid':i.status==='overdue'?'overdue':'pending'}" style="font-size:9px">${i.status||'—'}</span></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+
+    // Recent payments
+    const pmtItems = payments.items || payments || [];
+    $('ov-payments').innerHTML = pmtItems.length === 0
+      ? '<div class="text-muted text-center" style="padding:12px;font-size:12px">No payments</div>'
+      : `<table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="border-bottom:1px solid var(--border)"><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Reference</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Amount</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Date</th></tr></thead>
+          <tbody>${pmtItems.slice(0,5).map(p=>`<tr style="border-bottom:1px solid rgba(42,51,71,.4)">
+            <td style="padding:5px 8px;color:var(--gold);font-size:10.5px">${p.reference_number||p.id}</td>
+            <td style="padding:5px 8px;color:var(--success)">${fmtMoney(p.amount||0)}</td>
+            <td style="padding:5px 8px;color:var(--text2);font-size:10.5px">${(p.payment_date||'').slice(0,10)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+
+    // Recent expenditures
+    const expItems = expends.items || expends || [];
+    $('ov-expenditures').innerHTML = expItems.length === 0
+      ? '<div class="text-muted text-center" style="padding:12px;font-size:12px">No expenditures</div>'
+      : `<table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="border-bottom:1px solid var(--border)"><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Dept</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Amount</th><th style="padding:4px 8px;color:var(--text2);font-size:9.5px;text-transform:uppercase">Status</th></tr></thead>
+          <tbody>${expItems.slice(0,5).map(e=>`<tr style="border-bottom:1px solid rgba(42,51,71,.4)">
+            <td style="padding:5px 8px;color:var(--text2);font-size:10.5px">${e.department||'—'}</td>
+            <td style="padding:5px 8px;color:var(--warning)">${fmtMoney(e.amount||0)}</td>
+            <td style="padding:5px 8px"><span class="badge badge-${e.status==='approved'?'paid':'pending'}" style="font-size:9px">${e.status||'—'}</span></td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+
+    // Alerts
+    const alertItems = alerts || [];
+    $('ov-alerts').innerHTML = alertItems.length === 0
+      ? '<div class="text-muted text-center" style="padding:12px;font-size:12px">No active alerts</div>'
+      : alertItems.slice(0,5).map(a=>`
+          <div class="activity-item">
+            <div class="activity-dot ${a.severity||'medium'}" style="background:${a.severity==='high'?'var(--danger)':a.severity==='medium'?'var(--warning)':'var(--gold)'}"></div>
+            <div><div style="font-size:12px;font-weight:500">${a.description||a.alert_type||'Alert'}</div>
+            <div class="activity-meta">${a.ratepayer||''} · ${(a.created_at||'').slice(0,10)}</div></div>
+          </div>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── ACTIVITY FEED ─────────────────────────────────────────────────────────────
+const actColors = { LOGIN:'login', CREATE:'create', UPDATE:'update', DELETE:'delete', IMPORT:'import', FLAG:'flag' };
+async function loadActivity() {
+  const from   = $('af-from').value;
+  const to     = $('af-to').value;
+  const action = $('af-action').value;
+  try {
+    let url = '/api/audit-logs?limit=200';
+    if (from)   url += `&date_from=${from}`;
+    if (to)     url += `&date_to=${to}`;
+    if (action) url += `&action=${encodeURIComponent(action)}`;
+    const data = await apiFetch(url);
+    $('af-count').textContent = `${data.items.length} of ${data.total} events`;
+    $('af-feed').innerHTML = data.items.length === 0
+      ? '<div class="text-muted text-center" style="padding:24px;font-size:12px">No activity found</div>'
+      : data.items.map(log => `
+          <div class="activity-item">
+            <div class="activity-dot ${actColors[log.action]||'login'}"></div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:12px;font-weight:600">${log.user}</span>
+                <span class="badge badge-${log.action==='CREATE'?'paid':log.action==='DELETE'?'danger':log.action==='UPDATE'?'warning':'info'}" style="font-size:9px">${log.action}</span>
+                <span style="font-size:10.5px;color:var(--text2)">${log.table_name}</span>
+                <span style="font-size:10px;color:var(--text3);margin-left:auto">${log.timestamp}</span>
+              </div>
+              <div class="activity-meta" style="margin-top:2px">${log.description}</div>
+            </div>
+          </div>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+function exportAudit(fmt) {
+  const from=$('af-from').value, to=$('af-to').value;
+  let url=`/api/reports/audit-trail?format=${fmt}`;
+  if(from) url+=`&date_from=${from}`;
+  if(to)   url+=`&date_to=${to}`;
+  downloadExport(url,`audit_trail.${fmt}`);
+}
+
+// ── DATA ENTRY — Ratepayer ─────────────────────────────────────────────────────
+async function saveRatepayer() {
+  const data = { full_name:$('rp_name').value.trim(), account_number:$('rp_acc').value.trim(),
+    property_address:$('rp_addr').value.trim(), zone:$('rp_zone').value,
+    phone:$('rp_phone').value.trim()||null, email:$('rp_email').value.trim()||null,
+    property_type:$('rp_type').value, rate_category:$('rp_rcat').value };
+  if (!data.full_name||!data.account_number||!data.property_address) { toast('Name, account number, and address are required','warning'); return; }
+  try {
+    await apiPost('/api/ratepayers', data);
+    toast(`Ratepayer "${data.full_name}" saved successfully`,'success');
+    ['rp_name','rp_acc','rp_addr','rp_phone','rp_email'].forEach(id => $(id).value='');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── DATA ENTRY — Invoice ───────────────────────────────────────────────────────
+let _invRpId = null;
+async function searchRatepayerFor(prefix) {
+  const q = $(prefix + '_acc').value.trim(); if (q.length < 3) return;
+  try {
+    const data = await apiFetch(`/api/ratepayers?search=${encodeURIComponent(q)}&limit=1`);
+    const items = data.items || data;
+    if (items.length) {
+      const rp = items[0];
+      if (prefix === 'inv') { _invRpId = rp.id; $('inv_rp_info').textContent = `✓ Found: ${rp.full_name} — ${rp.zone}`; }
+      if (prefix === 'pmt') { _pmtRpId = rp.id; $('pmt_rp_info').textContent = `✓ Found: ${rp.full_name} — ${rp.zone}`; }
+    }
+  } catch(e) {}
+}
+
+async function saveInvoice() {
+  const data = { invoice_number:$('inv_num').value.trim(), ratepayer_id:_invRpId,
+    account_number:$('inv_acc').value.trim(), category:$('inv_cat').value,
+    amount:parseFloat($('inv_amt').value)||0, issue_date:$('inv_date').value,
+    due_date:$('inv_due').value, billing_period:$('inv_period').value||null,
+    description:$('inv_desc').value||null };
+  if (!data.invoice_number||!data.amount||!data.issue_date||!data.due_date) { toast('Invoice number, amount, issue date, and due date are required','warning'); return; }
+  if (!data.ratepayer_id&&!data.account_number) { toast('Enter an account number','warning'); return; }
+  try {
+    await apiPost('/api/invoices', data);
+    toast(`Invoice ${data.invoice_number} saved`,'success');
+    ['inv_num','inv_amt','inv_period','inv_desc'].forEach(id=>$(id).value='');
+    _invRpId=null; $('inv_rp_info').textContent='';
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── DATA ENTRY — Payment ──────────────────────────────────────────────────────
+let _pmtRpId = null;
+async function savePayment() {
+  const data = { reference_number:$('pmt_ref').value.trim(), ratepayer_id:_pmtRpId,
+    account_number:$('pmt_acc').value.trim(), amount:parseFloat($('pmt_amt').value)||0,
+    payment_date:$('pmt_date').value, payment_method:$('pmt_method').value,
+    category:$('pmt_cat').value, notes:$('pmt_notes').value||null };
+  if (!data.reference_number||!data.amount||!data.payment_date) { toast('Reference, amount, and date are required','warning'); return; }
+  if (!data.ratepayer_id&&!data.account_number) { toast('Enter an account number','warning'); return; }
+  try {
+    await apiPost('/api/payments', data);
+    toast(`Payment ${data.reference_number} saved`,'success');
+    ['pmt_ref','pmt_amt','pmt_notes'].forEach(id=>$(id).value='');
+    _pmtRpId=null; $('pmt_rp_info').textContent='';
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── DATA ENTRY — Expenditure ──────────────────────────────────────────────────
+async function saveExpenditure() {
+  const data = { reference_number:$('exp_ref').value.trim(), department:$('exp_dept').value,
+    amount:parseFloat($('exp_amt').value)||0, expenditure_date:$('exp_date').value,
+    budget_line:$('exp_bline').value||null, supplier:$('exp_supplier').value||null,
+    description:$('exp_desc').value.trim() };
+  if (!data.reference_number||!data.amount||!data.expenditure_date||!data.description) { toast('Reference, amount, date, and description are required','warning'); return; }
+  try {
+    await apiPost('/api/expenditures', data);
+    toast(`Expenditure ${data.reference_number} saved`,'success');
+    ['exp_ref','exp_amt','exp_bline','exp_supplier','exp_desc'].forEach(id=>$(id).value='');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── REVENUE PERFORMANCE ───────────────────────────────────────────────────────
+let perf_fy = '';
+async function loadPerf() {
+  perf_fy = $('perf-fy').value.trim();
+  try {
+    let url = '/api/reports/performance?format=json';
+    if (perf_fy) url += `&fiscal_year=${encodeURIComponent(perf_fy)}`;
+    const data = await apiFetch(url);
+    const { rows, totals } = data;
+    if (!rows.length) { toast('No data found','warning'); return; }
+
+    mkKpis('perf-kpis', [
+      ['Revenue Target',   fmtMoney(totals.total_target)],
+      ['Total Billed',     fmtMoney(totals.total_billed)],
+      ['Total Collected',  fmtMoney(totals.total_collected), 'text-success'],
+      ['Overall Variance', fmtMoney(totals.overall_variance), totals.overall_variance>=0?'text-success':'text-danger'],
+    ]);
+
+    show('perf-charts');
+    mkChart('perfBarChart', { type:'bar', data:{ labels:rows.map(r=>r.category), datasets:[
+      {label:'Target',    data:rows.map(r=>r.target),    backgroundColor:'rgba(59,125,216,0.55)'},
+      {label:'Collected', data:rows.map(r=>r.collected), backgroundColor:'rgba(39,174,96,0.65)'},
+      {label:'Billed',    data:rows.map(r=>r.billed),    backgroundColor:'rgba(243,156,18,0.45)'},
+    ]}, options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}});
+    mkChart('perfPieChart', { type:'doughnut', data:{labels:rows.map(r=>r.category),datasets:[{data:rows.map(r=>r.collected),backgroundColor:['#3b7dd8','#27ae60','#f39c12','#e74c3c','#9b59b6','#1abc9c','#e67e22','#95a5a6'],borderWidth:1}]}, options:{responsive:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}`}}}}});
+
+    $('perf-tbody').innerHTML = rows.map(r => {
+      const vc = r.variance>0?'variance-pos':r.variance<0?'variance-neg':'';
+      const sc = r.status==='Above Target'?'badge-paid':r.status==='Below Target'?'badge-danger':'badge-pending';
+      return `<tr>
+        <td style="font-weight:500;text-transform:capitalize">${r.category}</td>
+        <td>${r.target>0?fmtMoney(r.target):'<span style="color:var(--text3)">—</span>'}</td>
+        <td>${fmtMoney(r.billed)}</td>
+        <td class="text-success">${fmtMoney(r.collected)}</td>
+        <td class="${r.outstanding>0?'text-danger':''}">${fmtMoney(r.outstanding)}</td>
+        <td>${progBar(r.collection_rate)}</td>
+        <td class="${vc}">${r.target>0?fmtMoney(r.variance):'—'}</td>
+        <td class="${vc}">${r.target>0?r.variance_pct+'%':'—'}</td>
+        <td><span class="badge ${sc}" style="font-size:9px">${r.status}</span></td>
+      </tr>`;
+    }).join('') +
+    `<tr class="total-row"><td>TOTAL</td><td>${fmtMoney(totals.total_target)}</td><td>${fmtMoney(totals.total_billed)}</td><td class="text-success">${fmtMoney(totals.total_collected)}</td><td></td><td></td><td class="${totals.overall_variance>=0?'variance-pos':'variance-neg'}">${fmtMoney(totals.overall_variance)}</td><td></td><td></td></tr>`;
+    show('perf-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+function exportRpt(base, name, fy, fmt='csv') {
+  let url=`${base}?format=${fmt}`; if(fy) url+=`&fiscal_year=${encodeURIComponent(fy)}`; downloadExport(url,`${name}.${fmt}`);
+}
+
+// ── FINANCIAL SUMMARY ─────────────────────────────────────────────────────────
+async function loadFinancial() {
+  try {
+    const data = await apiFetch('/api/reports/financial-summary?format=json');
+    const { rows, totals } = data;
+    mkKpis('fin-kpis', [
+      ['Total Billed',     fmtMoney(totals.total_billed)],
+      ['Total Collected',  fmtMoney(totals.total_collected), 'text-success'],
+      ['Total Outstanding',fmtMoney(totals.total_outstanding), 'text-danger'],
+      ['Collection Rate',  totals.collection_rate + '%'],
+    ]);
+    show('fin-charts');
+    mkChart('finBarChart',{type:'bar',data:{labels:rows.map(r=>r.category),datasets:[{label:'Billed',data:rows.map(r=>r.billed),backgroundColor:'rgba(59,125,216,0.6)'},{label:'Collected',data:rows.map(r=>r.collected),backgroundColor:'rgba(39,174,96,0.6)'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}});
+    mkChart('finPieChart',{type:'doughnut',data:{labels:['Collected','Outstanding'],datasets:[{data:[totals.total_collected,totals.total_outstanding],backgroundColor:['rgba(39,174,96,0.7)','rgba(231,76,60,0.7)'],borderWidth:1}]},options:{responsive:true,cutout:'55%',plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}},tooltip:{callbacks:{label:ctx=>` $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}`}}}}});
+    $('fin-tbody').innerHTML = rows.map(r=>`<tr>
+      <td style="font-weight:500;text-transform:capitalize">${r.category}</td>
+      <td>${r.invoice_count}</td><td>${fmtMoney(r.billed)}</td>
+      <td class="text-success">${fmtMoney(r.collected)}</td>
+      <td class="${r.outstanding>0?'text-danger':''}">${fmtMoney(r.outstanding)}</td>
+      <td>${progBar(r.collection_rate)}</td>
+    </tr>`).join('') +
+    `<tr class="total-row"><td>TOTAL</td><td>${rows.reduce((s,r)=>s+r.invoice_count,0)}</td><td>${fmtMoney(totals.total_billed)}</td><td class="text-success">${fmtMoney(totals.total_collected)}</td><td class="text-danger">${fmtMoney(totals.total_outstanding)}</td><td>${totals.collection_rate}%</td></tr>`;
+    show('fin-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── COLLECTION TREND ──────────────────────────────────────────────────────────
+async function loadTrend() {
+  try {
+    const rows = await apiFetch('/api/reports/collection-rate-trend?format=json');
+    if (!rows.length) { toast('No trend data available','warning'); return; }
+    mkChart('trendChart', {
+      type: 'line',
+      data: { labels: rows.map(r=>r.month), datasets: [
+        {label:'Collection Rate (%)', data:rows.map(r=>r.collection_rate), borderColor:'var(--primary-light)', backgroundColor:'rgba(91,157,248,0.1)', tension:.3, fill:true, yAxisID:'y1'},
+        {label:'Collected ($)',       data:rows.map(r=>r.collected),       borderColor:'var(--success)',       backgroundColor:'transparent', tension:.3, borderDash:[4,3], yAxisID:'y2'},
+      ]},
+      options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},scales:{y1:{type:'linear',position:'left',min:0,max:100,ticks:{font:{size:9},callback:v=>v+'%'}},y2:{type:'linear',position:'right',ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)},grid:{drawOnChartArea:false}}}}
+    });
+    $('trend-tbody').innerHTML = rows.map(r=>`<tr>
+      <td style="font-weight:500">${r.month}</td>
+      <td>${fmtMoney(r.billed||0)}</td>
+      <td class="text-success">${fmtMoney(r.collected||0)}</td>
+      <td class="text-danger">${fmtMoney(r.outstanding||0)}</td>
+      <td>${progBar(r.collection_rate||0)}</td>
+    </tr>`).join('');
+    show('trend-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── OFFICER PERFORMANCE ───────────────────────────────────────────────────────
+async function loadOfficer() {
+  try {
+    const data = await apiFetch('/api/reports/officer-performance?format=json');
+    const rows = data.rows || data;
+    if (!rows.length) { toast('No officer data available','warning'); return; }
+    const totals = data.totals || {};
+    if (totals.total_collected !== undefined) {
+      mkKpis('off-kpis',[
+        ['Officers', rows.length],
+        ['Total Collected', fmtMoney(totals.total_collected), 'text-success'],
+        ['Total Billed', fmtMoney(totals.total_billed)],
+        ['Avg Collection Rate', (totals.avg_collection_rate||0)+'%'],
+      ]);
+    }
+    $('off-tbody').innerHTML = rows.map((r,i)=>`<tr>
+      <td style="font-weight:700;color:${i===0?'var(--gold)':i===1?'var(--text2)':'var(--text3)'}">${i+1}</td>
+      <td style="font-weight:600">${r.officer||r.user||r.name||'—'}</td>
+      <td>${r.invoice_count||0}</td>
+      <td>${fmtMoney(r.billed||0)}</td>
+      <td class="text-success">${fmtMoney(r.collected||0)}</td>
+      <td class="${(r.outstanding||0)>0?'text-danger':''}">${fmtMoney(r.outstanding||0)}</td>
+      <td>${ratePill(r.collection_rate||0)}</td>
+      <td>${progBar(r.collection_rate||0)}</td>
+    </tr>`).join('');
+    show('off-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── BUDGET VARIANCE ───────────────────────────────────────────────────────────
+async function loadVariance() {
+  try {
+    const rows = await apiFetch('/api/reports/budget-variance?format=json');
+    if (!rows.length) { toast('No budget data. Enter budgets first.','warning'); return; }
+    const totalAlloc = rows.reduce((s,r)=>s+r.allocated,0);
+    const totalSpent = rows.reduce((s,r)=>s+r.actual_spent,0);
+    mkKpis('var-kpis',[
+      ['Total Allocated', fmtMoney(totalAlloc)],
+      ['Total Spent',     fmtMoney(totalSpent), 'text-warning'],
+      ['Net Variance',    fmtMoney(totalAlloc-totalSpent), totalAlloc-totalSpent>=0?'text-success':'text-danger'],
+      ['Over Budget',     rows.filter(r=>r.variance<0).length, 'text-danger'],
+    ]);
+    show('var-chart-block');
+    mkChart('varChart',{type:'bar',data:{labels:rows.map(r=>r.department),datasets:[{label:'Allocated',data:rows.map(r=>r.allocated),backgroundColor:'rgba(59,125,216,0.6)'},{label:'Spent',data:rows.map(r=>r.actual_spent),backgroundColor:'rgba(243,156,18,0.6)'}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},scales:{y:{beginAtZero:true,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}});
+    $('var-tbody').innerHTML = rows.map(r=>{
+      const c=r.variance<0?'variance-neg':r.variance>0?'variance-pos':'';
+      const s=r.status==='Over Budget'?'badge-danger':r.status==='Under Budget'?'badge-paid':'badge-pending';
+      return `<tr><td style="font-weight:500">${r.department}</td><td>${r.fiscal_year}</td><td style="color:var(--text2)">${r.category}</td><td>${fmtMoney(r.allocated)}</td><td>${fmtMoney(r.actual_spent)}</td><td class="${c} fw-bold">${fmtMoney(r.variance)}</td><td class="${c}">${r.variance_pct}%</td><td><span class="badge ${s}" style="font-size:9px">${r.status}</span></td></tr>`;
+    }).join('');
+    show('var-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── CASHFLOW FORECAST ─────────────────────────────────────────────────────────
+async function loadCashflow() {
+  try {
+    const data = await apiFetch('/api/reports/cashflow-forecast?format=json');
+    const rows = data.rows || data;
+    if (!rows.length) { toast('No cashflow data available','warning'); return; }
+    const totals = data.totals || {};
+    if (totals.total_inflow !== undefined) {
+      mkKpis('cf-kpis',[
+        ['Expected Inflow',  fmtMoney(totals.total_inflow),  'text-success'],
+        ['Expected Outflow', fmtMoney(totals.total_outflow), 'text-danger'],
+        ['Net Position',     fmtMoney(totals.net_position),  totals.net_position>=0?'text-success':'text-danger'],
+      ]);
+    }
+    show('cf-chart-block');
+    mkChart('cfChart',{type:'bar',data:{labels:rows.map(r=>r.period||r.month),datasets:[
+      {label:'Inflow',  data:rows.map(r=>r.expected_inflow||r.inflow||0),  backgroundColor:'rgba(39,174,96,0.6)'},
+      {label:'Outflow', data:rows.map(r=>r.expected_outflow||r.outflow||0),backgroundColor:'rgba(231,76,60,0.6)'},
+      {type:'line',label:'Net',data:rows.map(r=>(r.net_position||r.net)||0),borderColor:'var(--primary-light)',backgroundColor:'transparent',tension:.3},
+    ]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},scales:{y:{beginAtZero:false,ticks:{font:{size:9},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}});
+    $('cf-tbody').innerHTML = rows.map(r=>{
+      const net=r.net_position||r.net||0;
+      return `<tr><td style="font-weight:500">${r.period||r.month||'—'}</td><td class="text-success">${fmtMoney(r.expected_inflow||r.inflow||0)}</td><td class="text-danger">${fmtMoney(r.expected_outflow||r.outflow||0)}</td><td class="${net>=0?'text-success':'text-danger'}">${fmtMoney(net)}</td><td>${fmtMoney(r.cumulative||0)}</td></tr>`;
+    }).join('');
+    show('cf-table-block');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── BUDGETS ───────────────────────────────────────────────────────────────────
+async function saveBudgetEntry() {
+  if (!canManage) { toast('You do not have permission to manage budgets','warning'); return; }
+  const data = { fiscal_year:$('b_fy').value.trim(), department:$('b_dept').value,
+    category:$('b_cat').value.trim()||'Operational',
+    allocated_amount:parseFloat($('b_alloc').value)||0,
+    spent_amount:parseFloat($('b_spent').value)||0 };
+  if (!data.fiscal_year||!data.allocated_amount) { toast('Fiscal year and allocated amount required','warning'); return; }
+  try {
+    await apiPost('/api/budgets', data);
+    toast(`Budget saved: ${data.department} ${data.fiscal_year}`,'success');
+    ['b_fy','b_cat','b_alloc'].forEach(id=>$(id).value='');
+    $('b_spent').value='0';
+  } catch(e) { toast(e.message,'error'); }
+}
+async function loadBudgetView() {
+  try {
+    const data = await apiFetch('/api/budgets');
+    $('bud-view-count').textContent = `${data.length} Budget Entries`;
+    $('bud-tbody').innerHTML = data.length===0
+      ? '<tr><td colspan="7" class="text-center text-muted" style="padding:20px">No budget entries found</td></tr>'
+      : data.map(b=>`<tr>
+          <td style="font-weight:500">${b.department}</td><td>${b.fiscal_year}</td>
+          <td style="color:var(--text2)">${b.category}</td><td>${fmtMoney(b.allocated)}</td>
+          <td class="text-warning">${fmtMoney(b.spent)}</td>
+          <td class="${b.remaining<0?'text-danger':'text-success'}">${fmtMoney(b.remaining)}</td>
+          <td style="white-space:nowrap">${canManage?`<button class="btn btn-sm btn-secondary" onclick="openBudgetEdit(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button> <button class="btn btn-sm btn-danger" onclick="delBudget(${b.id},'${b.department}')">Del</button>`:'—'}</td>
+        </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+function openBudgetEdit(b) {
+  $('eb_id').value=$('eb-title').textContent=`Edit: ${b.department} ${b.fiscal_year}`;
+  $('eb_id').value=b.id; $('eb_alloc').value=b.allocated; $('eb_spent').value=b.spent; $('eb_cat').value=b.category;
+  $('eb-title').textContent=`Edit: ${b.department} ${b.fiscal_year}`;
+  openModal('editBudgetModal');
+}
+async function saveBudgetEdit() {
+  const id=$('eb_id').value;
+  try {
+    await apiPut(`/api/budgets/${id}`,{allocated_amount:parseFloat($('eb_alloc').value)||0,spent_amount:parseFloat($('eb_spent').value)||0,category:$('eb_cat').value.trim()});
+    toast('Budget updated','success'); closeModal('editBudgetModal'); loadBudgetView();
+  } catch(e) { toast(e.message,'error'); }
+}
+async function delBudget(id, dept) {
+  await confirmDelete(`Delete budget for ${dept}?`, async()=>{
+    try { await apiDelete(`/api/budgets/${id}`); toast('Budget deleted','success'); loadBudgetView(); } catch(e) { toast(e.message,'error'); }
+  });
+}
+
+// ── REVENUE TARGETS ───────────────────────────────────────────────────────────
+async function saveTargetEntry() {
+  if (!canManage) { toast('You do not have permission to set revenue targets','warning'); return; }
+  const data = { fiscal_year:$('t_fy').value.trim(), category:$('t_cat').value,
+    target_amount:parseFloat($('t_amount').value)||0, period:$('t_period').value,
+    notes:$('t_notes').value||null };
+  if (!data.fiscal_year||!data.target_amount) { toast('Fiscal year and target amount required','warning'); return; }
+  try {
+    await apiPost('/api/revenue-targets', data);
+    toast(`Target saved: ${data.category} ${data.fiscal_year}`,'success');
+    $('t_amount').value=''; $('t_notes').value='';
+  } catch(e) { toast(e.message,'error'); }
+}
+async function loadTargetView() {
+  const fy=$('tgt-fy-filter').value.trim();
+  try {
+    let url='/api/revenue-targets'; if(fy) url+=`?fiscal_year=${encodeURIComponent(fy)}`;
+    const data = await apiFetch(url);
+    $('tgt-tbody').innerHTML = data.length===0
+      ? '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No targets found</td></tr>'
+      : data.map(t=>`<tr>
+          <td>${t.fiscal_year}</td><td style="font-weight:500;text-transform:capitalize">${t.category}</td>
+          <td><span class="badge badge-info" style="font-size:9px">${t.period}</span></td>
+          <td>${fmtMoney(t.target_amount)}</td>
+          <td style="color:var(--text2);font-size:11px">${t.notes||'—'}</td>
+          <td style="white-space:nowrap">${canManage?`<button class="btn btn-sm btn-secondary" onclick="openTargetEdit(${JSON.stringify(t).replace(/"/g,'&quot;')})">Edit</button> <button class="btn btn-sm btn-danger" onclick="delTarget(${t.id},'${t.category}')">Del</button>`:'—'}</td>
+        </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+function openTargetEdit(t) {
+  $('et_id').value=t.id; $('et-title').textContent=`Edit: ${t.category} ${t.fiscal_year} (${t.period})`;
+  $('et_amount').value=t.target_amount; $('et_period').value=t.period; $('et_notes').value=t.notes||'';
+  openModal('editTargetModal');
+}
+async function saveTargetEdit() {
+  const id=$('et_id').value;
+  try {
+    await apiPut(`/api/revenue-targets/${id}`,{target_amount:parseFloat($('et_amount').value)||0,period:$('et_period').value,notes:$('et_notes').value||null});
+    toast('Target updated','success'); closeModal('editTargetModal'); loadTargetView();
+  } catch(e) { toast(e.message,'error'); }
+}
+async function delTarget(id,cat) {
+  await confirmDelete(`Delete revenue target for "${cat}"?`, async()=>{
+    try { await apiDelete(`/api/revenue-targets/${id}`); toast('Target deleted','success'); loadTargetView(); } catch(e) { toast(e.message,'error'); }
+  });
+}
+
+// ── AUDIT PAGE ────────────────────────────────────────────────────────────────
+const aColors = { LOGIN:'info', CREATE:'paid', UPDATE:'warning', IMPORT:'info', FLAG:'danger', DELETE:'danger' };
+async function loadAuditPage() {
+  const from=$('aud-from').value, to=$('aud-to').value;
+  try {
+    let url='/api/audit-logs?limit=100';
+    if(from) url+=`&date_from=${from}`; if(to) url+=`&date_to=${to}`;
+    const data=await apiFetch(url);
+    $('aud-count').textContent=`Showing ${data.items.length} of ${data.total} records`;
+    $('aud-tbody').innerHTML=data.items.map((log,i)=>`<tr>
+      <td style="color:var(--text3);font-size:10.5px">${i+1}</td>
+      <td style="font-weight:500">${log.user}</td>
+      <td><span class="badge badge-${aColors[log.action]||'info'}" style="font-size:9px">${log.action}</span></td>
+      <td style="color:var(--text2);font-size:11px">${log.table_name}</td>
+      <td style="font-size:12px">${log.description}</td>
+      <td style="font-size:11px;color:var(--text2)">${log.timestamp}</td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+function exportAuditPage(fmt) {
+  const from=$('aud-from').value, to=$('aud-to').value;
+  let url=`/api/reports/audit-trail?format=${fmt}`;
+  if(from) url+=`&date_from=${from}`; if(to) url+=`&date_to=${to}`;
+  downloadExport(url,`audit_trail.${fmt}`);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(function() {
+  const now = new Date(), start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fy = `${now.getMonth()>=6?now.getFullYear():now.getFullYear()-1}/${now.getMonth()>=6?now.getFullYear()+1:now.getFullYear()}`;
+  const todayStr  = now.toISOString().slice(0,10);
+  const startStr  = start.toISOString().slice(0,10);
+  ['af-from','aud-from'].forEach(id=>$(id).value=startStr);
+  ['af-to','aud-to'].forEach(id=>$(id).value=todayStr);
+  ['b_fy','t_fy','perf-fy','tgt-fy-filter'].forEach(id=>$(id).value=fy);
+  // Default invoice/payment dates
+  ['inv_date','inv_due','pmt_date','exp_date'].forEach(id=>{ if($(id)) $(id).value=todayStr; });
+  loadOverview();
+})();
+
+// ── COH Dataset Import ────────────────────────────────────────────────────────
+async function importCOHDataset() {
+  if (!confirm('Import City of Harare official financial dataset (2021-2025)?\n\nThis will add/update revenue targets and budget data from the COH Excel file.')) return;
+  try {
+    const btn = document.querySelector('[onclick="importCOHDataset()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing...'; }
+    const res = await apiPost('/api/import/coh-dataset', {});
+    const rt = res.revenue_targets || {};
+    const bud = res.budgets || {};
+    toast(`COH data imported: ${rt.created} revenue targets created, ${rt.updated} updated; ${bud.created} budgets created, ${bud.updated} updated`, 'success');
+    if (res.errors && res.errors.length) {
+      toast(`Warnings: ${res.errors.slice(0, 3).join('; ')}`, 'warning');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Load COH Data'; }
+    loadOverview();
+  } catch(e) {
+    toast('COH import failed: ' + e.message, 'error');
+    const btn = document.querySelector('[onclick="importCOHDataset()"]');
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Load COH Data'; }
+  }
+}
+
+// ── Per-report PDF exports ────────────────────────────────────────────────────
+async function exportReportPDF(apiUrl, title, filename) {
+  try {
+    const data = await apiFetch(apiUrl);
+    let cols, rows;
+    if (Array.isArray(data)) {
+      if (data.length === 0) { toast('No data to export', 'warning'); return; }
+      cols = Object.keys(data[0]).map(k => k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
+      rows = data.map(r => Object.values(r).map(v => v === null || v === undefined ? '' : String(v)));
+    } else if (data.data) {
+      cols = Object.keys(data.data[0] || {}).map(k => k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
+      rows = (data.data || []).map(r => Object.values(r).map(v => v === null || v === undefined ? '' : String(v)));
+    } else {
+      cols = ['Metric', 'Value'];
+      rows = Object.entries(data).filter(([k]) => typeof data[k] !== 'object').map(([k,v]) => [k.replace(/_/g,' '), String(v)]);
+    }
+    await exportPDF(title, cols, rows, filename);
+  } catch(e) { toast('PDF export failed: ' + e.message, 'error'); }
+}
+</script>
+</body>
+</html>

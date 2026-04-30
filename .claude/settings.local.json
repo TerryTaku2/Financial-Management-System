@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python database.py)",
+      "Bash(python seed.py)",
+      "Bash(python -c ':*)",
+      "Bash(python -c:*)",
+      "Bash(python3 -c ' *)",
+      "Bash(py -c ' *)",
+      "Bash(py -m pip install anthropic python-dotenv --quiet)",
+      "Bash(curl -s -X POST \"http://localhost:8000/api/auth/login\" -F \"username=t.muromba\" -F \"password=password123\")",
+      "Bash(curl -v -X POST \"http://localhost:8000/api/auth/login\" -F \"username=t.muromba\" -F \"password=password123\")",
+      "Bash(uvicorn main:app --host 0.0.0.0 --port 8000)",
+      "Bash(py -3.13 -m pip install anthropic python-dotenv)",
+      "Bash(py -3.13 -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level warning)",
+      "Bash(py -3.13 -m uvicorn main:app --host 0.0.0.0 --port 8000)",
+      "PowerShell(netstat -ano)",
+      "Bash(py -3.13 -m uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info)"
+    ]
+  }
+}
