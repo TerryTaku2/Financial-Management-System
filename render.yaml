@@ -5,5 +5,5 @@ services:
     envVars:
       - key: FMS_SECRET_KEY
         value: "your-secure-jwt-secret-key-here-change-this"
-    buildCommand: pip install -r backend/requirements.txt && cd backend && python database.py && python seed.py
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && python database.py && python seed.py && uvicorn main:app --host 0.0.0.0 --port $PORT
