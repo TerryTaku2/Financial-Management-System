@@ -83,11 +83,13 @@ requireAuth();
 buildSidebar('dashboard');
 document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
-Chart.defaults.color = '#8892a4';
-Chart.defaults.borderColor = '#2a3347';
-
 async function loadDashboard() {
   try {
+    if (typeof Chart !== 'undefined') {
+      Chart.defaults.color = '#8892a4';
+      Chart.defaults.borderColor = '#2a3347';
+    }
+
     const [summary, trend, categories, alerts] = await Promise.all([
       apiFetch('/api/dashboard/summary'),
       apiFetch('/api/dashboard/monthly-trend'),
@@ -105,7 +107,7 @@ async function loadDashboard() {
     document.getElementById('statRatepayers').textContent = summary.ratepayers_count;
 
     // Trend chart
-    new Chart(document.getElementById('trendChart'), {
+    if (typeof Chart !== 'undefined') new Chart(document.getElementById('trendChart'), {
       type: 'line',
       data: {
         labels: trend.map(t => t.month),
@@ -118,7 +120,7 @@ async function loadDashboard() {
     });
 
     // Category chart
-    new Chart(document.getElementById('categoryChart'), {
+    if (typeof Chart !== 'undefined') new Chart(document.getElementById('categoryChart'), {
       type: 'bar',
       data: {
         labels: categories.map(c => c.category),

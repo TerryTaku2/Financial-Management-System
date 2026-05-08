@@ -122,7 +122,14 @@ function toast(msg, type = 'success') {
   const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
   const t = document.createElement('div');
   t.className = `toast ${type}`;
-  t.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'toast-icon';
+  iconSpan.textContent = icons[type] || 'ℹ️';
+  const msgSpan = document.createElement('span');
+  msgSpan.className = 'toast-msg';
+  msgSpan.textContent = msg;
+  t.appendChild(iconSpan);
+  t.appendChild(msgSpan);
   container.appendChild(t);
   setTimeout(() => t.remove(), 4000);
 }
@@ -795,9 +802,14 @@ async function exportChartAsPDF(canvasId, chartTitle, filename, subtitle) {
   // ── Render suggestions ────────────────────────────────────────────────────
   function renderSuggestions(list) {
     const el = document.getElementById('ai-suggestions');
-    el.innerHTML = list.map(s =>
-      `<button class="ai-suggestion" onclick="aiAsk(${JSON.stringify(s)})">${s}</button>`
-    ).join('');
+    el.innerHTML = ''; // Clear existing
+    list.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'ai-suggestion';
+      btn.textContent = s;
+      btn.onclick = () => aiAsk(s);
+      el.appendChild(btn);
+    });
   }
 
   // ── Append message ────────────────────────────────────────────────────────
@@ -805,21 +817,26 @@ async function exportChartAsPDF(canvasId, chartTitle, filename, subtitle) {
     const msgs = document.getElementById('ai-messages');
     const div = document.createElement('div');
     div.className = `ai-msg ${role}`;
-    div.innerHTML = `<div class="ai-bubble">${formatAIResponse(content)}</div>`;
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-bubble';
+    bubble.innerHTML = formatAIResponse(content);
+    div.appendChild(bubble);
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
   }
 
   function formatAIResponse(text) {
-    return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/^•\s(.+)$/gm, '<li>$1</li>')
-      .replace(/^-\s(.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-      .replace(/\n{2,}/g, '<br><br>')
-      .replace(/\n/g, '<br>');
+    let s = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    s = s.replace(/[*][*](.+?)[*][*]/g, '<strong>$1</strong>');
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/^•\s(.+)$/gm, '<li>$1</li>');
+    s = s.replace(/^-\s(.+)$/gm, '<li>$1</li>');
+    s = s.replace(/\n{2,}/g, '<br><br>');
+    s = s.replace(/\n/g, '<br>');
+    return s;
   }
 
   // ── Typing indicator ──────────────────────────────────────────────────────
@@ -840,7 +857,7 @@ async function exportChartAsPDF(canvasId, chartTitle, filename, subtitle) {
   window.aiAsk = async function(text) {
     if (!text?.trim() || loading) return;
     if (!aiReady) {
-      appendMessage('assistant', '⚠️ The AI assistant is not configured yet. Please add your **ANTHROPIC_API_KEY** to the `.env` file and restart the server.');
+      appendMessage('assistant', '⚠️ The AI assistant is not available in this version.');
       return;
     }
 

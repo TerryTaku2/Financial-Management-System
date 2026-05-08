@@ -1,6 +1,6 @@
 import bcrypt
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
@@ -8,7 +8,10 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db, User
 
-SECRET_KEY = os.environ.get("FMS_SECRET_KEY", "fms-harare-secret-key-2026-dissertation")
+SECRET_KEY = os.environ.get("FMS_SECRET_KEY")
+if not SECRET_KEY:
+    SECRET_KEY = "change-this-in-production-secure-key-2026"  # Temporary fallback for deployment
+    print("WARNING: FMS_SECRET_KEY not set, using insecure default. Set environment variable immediately!")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 8
 
@@ -23,7 +26,7 @@ def hash_password(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

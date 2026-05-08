@@ -16,7 +16,13 @@
       "Bash(py -3.13 -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level warning)",
       "Bash(py -3.13 -m uvicorn main:app --host 0.0.0.0 --port 8000)",
       "PowerShell(netstat -ano)",
-      "Bash(py -3.13 -m uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info)"
+      "Bash(py -3.13 -m uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info)",
+      "PowerShell(python --version 2>&1)",
+      "PowerShell(pip show fastapi 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object LocalPort, RemotePort, State, OwningProcess; Get-Process -Id \\(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Select-Object Name, Id)",
+      "PowerShell(Get-Process -Id 25040 -ErrorAction SilentlyContinue)",
+      "PowerShell(Invoke-WebRequest \"http://localhost:8000/api/health\" -UseBasicParsing 2>&1)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue)"
     ]
   }
 }

@@ -2,5 +2,8 @@ services:
   - type: web
     name: harare-fms
     runtime: python
-    buildCommand: pip install -r requirements.txt && cd backend && python database.py && python seed.py
+    envVars:
+      - key: FMS_SECRET_KEY
+        value: "your-secure-jwt-secret-key-here-change-this"
+    buildCommand: pip install -r backend/requirements.txt && cd backend && python database.py && python seed.py
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
