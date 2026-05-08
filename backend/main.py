@@ -280,13 +280,21 @@ async def parse_upload(file: UploadFile) -> list:
 # â”€â”€â”€ App Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app = FastAPI(title="City of Harare FMS", version="2.1.0")
-# NOTE: In production, restrict allow_origins to your deployed frontend domain.
-# e.g. allow_origins=["https://fms.harare.gov.zw"]
-app.add_middleware(CORSMiddleware, allow_origins=[
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://fms.harare.gov.zw"
-], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.on_event("startup")
+def on_startup():
+    from database import Base, engine, SessionLocal, User, UserRole
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            import sys as _sys, os as _os
+            _sys.path.insert(0, _os.path.dirname(__file__))
+            import seed  # noqa: F401
+    finally:
+        db.close()
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
