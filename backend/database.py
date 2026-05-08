@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Enum
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -8,7 +9,7 @@ def utcnow():
 
 import enum
 
-DATABASE_URL = "sqlite:///./fms_harare.db"
+DATABASE_URL = "sqlite:///" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "fms_harare.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
