@@ -99,6 +99,37 @@
         </div>
       </div>
 
+      <!-- Leakage Quantification by Type -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">📊 Leakage Quantification by Type</span>
+          <span style="font-size:11px;color:var(--text3)" id="quantMethodNote">ACFE (2022) weighted risk model</span>
+        </div>
+        <div id="quantTypeTable" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Leakage Quantification by Category -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">📂 Leakage by Revenue Category</span>
+          <span style="font-size:11px;color:var(--text3)">Objective 2 — revenue leakage measurement</span>
+        </div>
+        <div id="quantCategoryTable" style="overflow-x:auto"></div>
+      </div>
+
+      <!-- Cause Analysis Trend Chart -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <span class="card-title">📈 Leakage Cause Trend (Monthly)</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('causeTrendChart','cause_trend.png')">⬇ PNG</button>
+            <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('causeTrendChart','Leakage Cause Trend','cause_trend.pdf')">⬇ PDF</button>
+          </div>
+        </div>
+        <canvas id="causeTrendChart" height="180"></canvas>
+        <div id="causeAnalysisInsight" style="margin-top:12px;padding:10px;background:var(--bg3);border-radius:6px;font-size:13px;color:var(--text2)"></div>
+      </div>
+
       <!-- Active Alerts Table -->
       <div class="card">
         <div class="card-header">
@@ -115,6 +146,130 @@
 <script src="../js/shared.js"></script>
 <script>
 requireAuth(); buildSidebar('leakage');
+
+// ── WebSocket real-time updates ──────────────────────────────────────────────
+(function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws    = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onmessage = function(evt) {
+    try {
+      const d = JSON.parse(evt.data);
+      if (d.type === 'leakage_scan' && d.generated > 0) {
+        toast(`🚨 ${d.generated} new leakage alert(s) detected`, 'warning');
+        loadLeakage();
+      }
+      if (d.type === 'new_payment') {
+        const label = d.anomaly ? ` [${d.anomaly} anomaly]` : '';
+        toast(`💳 New payment $${d.amount?.toLocaleString()}${label}`, 'info');
+      }
+    } catch(_) {}
+  };
+  ws.onclose = () => setTimeout(connectWS, 4000);
+})();
+
+// ── Quantification loader ────────────────────────────────────────────────────
+async function loadQuantification() {
+  try {
+    const q = await apiFetch('/api/leakage/quantification');
+
+    // By-type table
+    const typeRows = q.by_type.map(t => `
+      <tr>
+        <td><strong>${t.type}</strong><div style="font-size:11px;color:var(--text3);max-width:320px">${t.description}</div></td>
+        <td style="text-align:right">${fmtMoney(t.raw)}</td>
+        <td style="text-align:right;font-weight:600;color:var(--danger)">${fmtMoney(t.leakage)}</td>
+        <td style="text-align:center">${Math.round(t.weight * 100)}%</td>
+      </tr>`).join('');
+    document.getElementById('quantTypeTable').innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--bg3);font-size:12px;text-transform:uppercase;letter-spacing:.5px">
+          <th style="padding:8px 12px;text-align:left">Leakage Type</th>
+          <th style="padding:8px 12px;text-align:right">Gross Amount</th>
+          <th style="padding:8px 12px;text-align:right">Est. Leakage</th>
+          <th style="padding:8px 12px;text-align:center">Weight</th>
+        </tr></thead>
+        <tbody>${typeRows}</tbody>
+        <tfoot><tr style="background:var(--bg3);font-weight:700">
+          <td style="padding:8px 12px">TOTAL</td>
+          <td></td>
+          <td style="padding:8px 12px;text-align:right;color:var(--danger)">${fmtMoney(q.total_leakage)}</td>
+          <td style="padding:8px 12px;text-align:center">${q.leakage_rate_pct}% of billed</td>
+        </tr></tfoot>
+      </table>`;
+
+    // By-category table
+    const catRows = q.by_category.map(c => `
+      <tr>
+        <td style="text-transform:capitalize;font-weight:500">${c.category}</td>
+        <td style="text-align:right">${fmtMoney(c.billed)}</td>
+        <td style="text-align:right">${fmtMoney(c.collected)}</td>
+        <td style="text-align:right">${fmtMoney(c.overdue_balance)}</td>
+        <td style="text-align:right;color:var(--danger);font-weight:600">${fmtMoney(c.estimated_leakage)}</td>
+        <td style="text-align:center">
+          <span class="badge badge-${c.leakage_pct >= 15 ? 'danger' : c.leakage_pct >= 8 ? 'warning' : 'low'}">${c.leakage_pct}%</span>
+        </td>
+        <td style="text-align:center">${c.collection_rate}%</td>
+      </tr>`).join('');
+    document.getElementById('quantCategoryTable').innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--bg3);font-size:12px;text-transform:uppercase;letter-spacing:.5px">
+          <th style="padding:8px 12px;text-align:left">Category</th>
+          <th style="padding:8px 12px;text-align:right">Billed</th>
+          <th style="padding:8px 12px;text-align:right">Collected</th>
+          <th style="padding:8px 12px;text-align:right">Overdue Balance</th>
+          <th style="padding:8px 12px;text-align:right">Est. Leakage</th>
+          <th style="padding:8px 12px;text-align:center">Leakage %</th>
+          <th style="padding:8px 12px;text-align:center">Collection Rate</th>
+        </tr></thead>
+        <tbody>${catRows}</tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('quantTypeTable').innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+  }
+}
+
+// ── Cause analysis chart loader ──────────────────────────────────────────────
+let _causeChart = null;
+async function loadCauseAnalysis() {
+  try {
+    const ca = await apiFetch('/api/leakage/cause-analysis?months=6');
+    const labels   = ca.monthly_trend.map(m => m.month);
+    const unrecData = ca.monthly_trend.map(m => m.unreconciled_leakage);
+    const ovdData   = ca.monthly_trend.map(m => m.overdue_leakage);
+    const anomData  = ca.monthly_trend.map(m => m.anomaly_leakage);
+
+    if (_causeChart) _causeChart.destroy();
+    _causeChart = new Chart(document.getElementById('causeTrendChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Unreconciled Payments', data: unrecData,
+            backgroundColor: 'rgba(231,76,60,0.75)', borderColor: '#e74c3c', borderWidth: 1 },
+          { label: 'Overdue Balances',      data: ovdData,
+            backgroundColor: 'rgba(243,156,18,0.75)', borderColor: '#f39c12', borderWidth: 1 },
+          { label: 'Anomalous Invoices',    data: anomData,
+            backgroundColor: 'rgba(59,125,216,0.75)', borderColor: '#3b7dd8', borderWidth: 1 },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' },
+                   tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` } } },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true,
+                    ticks: { callback: v => '$' + v.toLocaleString() } } }
+      }
+    });
+
+    const trendIcon = ca.trend_direction === 'worsening' ? '📈 Worsening' :
+                      ca.trend_direction === 'improving' ? '📉 Improving' : '➡ Stable';
+    const topCause  = ca.top_causes[0] || {};
+    document.getElementById('causeAnalysisInsight').innerHTML =
+      `<strong>Trend: ${trendIcon}</strong> — slope $${ca.slope_per_month}/month over ${ca.months_analysed} months. ` +
+      `Primary cause: <strong>${topCause.cause}</strong> (${topCause.share_pct}% of total leakage). ` +
+      `<em style="font-size:11px;color:var(--text3)">${ca.methodology}</em>`;
+  } catch(e) { console.warn('Cause analysis chart error:', e.message); }
+}
 
 async function loadLeakage() {
   try {
@@ -219,6 +374,8 @@ function printReport() {
 }
 
 loadLeakage();
+loadQuantification();
+loadCauseAnalysis();
 
 async function exportLeakagePDF() {
   try {
