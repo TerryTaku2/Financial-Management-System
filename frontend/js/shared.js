@@ -1,9 +1,7 @@
 // ── Config ──────────────────────────────────────────────────────────────
 // Uses window.location.origin so the app works on localhost AND any deployed host
 // (Render, Fly.io, PythonAnywhere, etc.) without code changes.
-const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:8000'
-  : window.location.origin;
+const API = window.location.origin;
 
 // ── Auth ────────────────────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('fms_token'); }

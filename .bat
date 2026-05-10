@@ -20,7 +20,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/3] Installing dependencies...
-pip install fastapi uvicorn sqlalchemy python-jose python-multipart bcrypt openpyxl --quiet
+pip install -r requirements.txt --quiet
 
 echo [2/3] Initialising database...
 cd backend
@@ -29,11 +29,11 @@ python seed.py
 
 echo [3/3] Starting FMS server...
 echo.
-echo  ✅ System ready!
-echo  🌐 Open your browser and go to:
-echo     http://localhost:8000/static/pages/login.html
+echo  System ready!
+echo  Open your browser and go to:
+echo     http://localhost:8001/static/pages/login.html
 echo.
-echo  📋 Default Login Credentials:
+echo  Default Login Credentials:
 echo     Admin:          admin / admin123
 echo     Revenue Officer: r.officer1 / password123
 echo     Auditor:        auditor1 / password123
@@ -43,7 +43,7 @@ echo  Press CTRL+C to stop the server.
 echo  ============================================================
 echo.
 
-start "" http://localhost:8000/static/pages/login.html
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+start "" http://localhost:8001/static/pages/login.html
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 
 pause

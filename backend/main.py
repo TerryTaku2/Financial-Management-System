@@ -1,4 +1,4 @@
-﻿import sys, os, io, csv as csv_mod, math, hashlib, re
+import sys, os, io, csv as csv_mod, math, hashlib, re
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Load .env from project root
@@ -38,11 +38,11 @@ from auth import (verify_password, hash_password, create_access_token,
 def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
-# â”€â”€â”€ Security Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Security Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 MAX_FAILED_LOGINS = 5
 LOCKOUT_MINUTES   = 30
 
-# â”€â”€â”€ Password Strength Validator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Password Strength Validator â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def validate_password_strength(password: str) -> str:
     """Returns error message string, or empty string if password is strong enough."""
     if len(password) < 8:
@@ -52,19 +52,19 @@ def validate_password_strength(password: str) -> str:
     if not re.search(r"[a-z]", password):
         return "Password must contain at least one lowercase letter."
     if not re.search(r"\d", password):
-        return "Password must contain at least one digit (0â€“9)."
+        return "Password must contain at least one digit (0-9)."
     return ""
 
-# â”€â”€â”€ Invoice Duplicate Fingerprint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Invoice Duplicate Fingerprint â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def compute_invoice_fingerprint(ratepayer_id: int, category: str, amount: float, due_date: str) -> str:
     """SHA-256 fingerprint to detect duplicate invoices (ACFE, 2022: Billing Scheme Fraud)."""
     raw = f"{ratepayer_id}|{category}|{round(amount, 2)}|{str(due_date)[:10]}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-# â”€â”€â”€ AI: Ratepayer Risk Score â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ AI: Ratepayer Risk Score â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def compute_ratepayer_risk(rp, db) -> dict:
     """
-    Composite 0â€“100 risk score per ratepayer using a weighted additive model.
+    Composite 0-100 risk score per ratepayer using a weighted additive model.
     Factors: overdue balance ratio (40%), payment recency (30%),
     anomaly-flagged invoices (20%), payment plan defaults (10%).
     Adapted from ZIMRA (2023) Taxpayer Risk Segmentation Framework and
@@ -96,7 +96,7 @@ def compute_ratepayer_risk(rp, db) -> dict:
     label = "high" if score >= 70 else ("medium" if score >= 40 else "low")
     return {"score": score, "label": label}
 
-# â”€â”€â”€ AI: Revenue Prediction (OLS Linear Regression) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ AI: Revenue Prediction (OLS Linear Regression) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def predict_next_month_revenue(db) -> dict:
     """
     Predict next month revenue using OLS linear regression on 6 months of data.
@@ -124,7 +124,7 @@ def predict_next_month_revenue(db) -> dict:
         "trend": "increasing" if slope > 0 else "decreasing",
         "slope_per_month": round(slope, 2),
         "last_6_months": monthly_data,
-        "basis": "OLS linear regression â€” Freedman, Pisani & Purves (2007)"
+        "basis": "OLS linear regression - Freedman, Pisani & Purves (2007)"
     }
 
 
@@ -144,9 +144,9 @@ def refresh_overdue_invoices(db: Session):
         db.commit()
     return len(overdue_list)
 
-# â”€â”€â”€ Anomaly Detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Anomaly Detection â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 # Uses Z-score method (Grubbs, 1969; Iglewicz & Hoaglin, 1993).
-# |Z| > 3.0 â†’ high severity; |Z| > 2.0 â†’ medium; |Z| > 1.5 â†’ low.
+# |Z| > 3.0 â†' high severity; |Z| > 2.0 â†' medium; |Z| > 1.5 â†' low.
 # This is the industry-standard statistical threshold for outlier detection
 # in financial data (ACFE, 2022; KPMG Revenue Assurance Framework, 2021).
 
@@ -164,24 +164,24 @@ def _zscore_flag(value: float, values: list) -> tuple:
     direction = "above" if z > 0 else "below"
     if abs_z > 3.0:
         return AnomalyFlag.high, (
-            f"Z-score {z:.2f} â€” amount is a high-severity outlier ({direction} Î¼=${mean:.2f}, Ïƒ=${std_dev:.2f}). "
+            f"Z-score {z:.2f} - amount is a high-severity outlier ({direction} Î¼=${mean:.2f}, Ïƒ=${std_dev:.2f}). "
             f"Consistent with revenue leakage patterns identified in DSR literature review."
         )
     elif abs_z > 2.0:
         return AnomalyFlag.medium, (
-            f"Z-score {z:.2f} â€” amount deviates significantly from category mean ${mean:.2f} (Ïƒ=${std_dev:.2f})."
+            f"Z-score {z:.2f} - amount deviates significantly from category mean ${mean:.2f} (Ïƒ=${std_dev:.2f})."
         )
     elif abs_z > 1.5:
         return AnomalyFlag.low, (
-            f"Z-score {z:.2f} â€” amount is slightly unusual vs category mean ${mean:.2f}."
+            f"Z-score {z:.2f} - amount is slightly unusual vs category mean ${mean:.2f}."
         )
     return AnomalyFlag.none, None
 
 def _detect_anomaly(value: float, values: list) -> tuple:
-    “””
+    """
     Primary anomaly detector: Isolation Forest for >=8 samples, Z-score fallback.
-    Isolation Forest — Liu, Ting & Zhou (2008). Isolation Forest. IEEE ICDM.
-    “””
+    Isolation Forest - Liu, Ting & Zhou (2008). Isolation Forest. IEEE ICDM.
+    """
     if len(values) >= 8:
         try:
             from sklearn.ensemble import IsolationForest
@@ -193,28 +193,28 @@ def _detect_anomaly(value: float, values: list) -> tuple:
             pred  = clf.predict([[value]])[0]  # -1 = anomaly
             if pred == -1:
                 mean_v    = sum(values) / len(values)
-                direction = “above” if value > mean_v else “below”
+                direction = "above" if value > mean_v else "below"
                 if score < -0.15:
                     return AnomalyFlag.high, (
-                        f”Isolation Forest anomaly score {score:.3f} — high-severity outlier “
-                        f”({direction} mean ${mean_v:.2f}, n={len(values)} samples). “
-                        f”Liu, Ting & Zhou (2008) IEEE ICDM.”
+                        f"Isolation Forest anomaly score {score:.3f} - high-severity outlier "
+                        f"({direction} mean ${mean_v:.2f}, n={len(values)} samples). "
+                        f"Liu, Ting & Zhou (2008) IEEE ICDM."
                     )
                 elif score < -0.05:
                     return AnomalyFlag.medium, (
-                        f”Isolation Forest anomaly score {score:.3f} — medium outlier “
-                        f”({direction} mean ${mean_v:.2f}). Liu, Ting & Zhou (2008).”
+                        f"Isolation Forest anomaly score {score:.3f} - medium outlier "
+                        f"({direction} mean ${mean_v:.2f}). Liu, Ting & Zhou (2008)."
                     )
                 else:
                     return AnomalyFlag.low, (
-                        f”Isolation Forest anomaly score {score:.3f} — marginal outlier detected.”
+                        f"Isolation Forest anomaly score {score:.3f} - marginal outlier detected."
                     )
             return AnomalyFlag.none, None
         except ImportError:
             pass
     return _zscore_flag(value, values)
 
-# â”€â”€â”€ Export Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Export Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def make_csv_response(headers, rows, filename):
     output = io.StringIO()
@@ -287,7 +287,7 @@ def export_response(fmt, headers, rows, csv_name, xlsx_name, sheet_name="Data", 
         return make_excel_response(headers, rows, xlsx_name, sheet_name, title)
     return make_csv_response(headers, rows, csv_name)
 
-# â”€â”€â”€ Import Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Import Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async def parse_upload(file: UploadFile) -> list:
     """Return list of dicts from CSV or XLSX upload."""
@@ -317,7 +317,7 @@ async def parse_upload(file: UploadFile) -> list:
 # ─── WebSocket Connection Manager ──────────────────────────────────────────────
 
 class _WSManager:
-    “””Broadcast JSON messages to all connected WebSocket clients.”””
+    """Broadcast JSON messages to all connected WebSocket clients."""
     def __init__(self):
         self._clients: set = set()
 
@@ -339,7 +339,7 @@ class _WSManager:
 
 ws_manager = _WSManager()
 
-# â”€â”€â”€ App Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ App Setup â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 app = FastAPI(title="City of Harare FMS", version="2.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -362,7 +362,7 @@ frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
-# â”€â”€â”€ Pydantic Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Pydantic Schemas â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 class RatepayerCreate(BaseModel):
     full_name: str
@@ -479,7 +479,7 @@ class NotificationCreate(BaseModel):
 class AlertResolveRequest(BaseModel):
     resolution_notes: str
 
-# â”€â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Auth â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.post("/api/auth/login")
 def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -518,7 +518,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         db.commit()
         _log(False, "wrong_password")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    # Successful login â€” reset security counters
+    # Successful login - reset security counters
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login = now()
@@ -558,7 +558,7 @@ def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
     db.commit()
     return {"message": "Password changed successfully"}
 
-# â”€â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Dashboard â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/dashboard/summary")
 def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -572,8 +572,8 @@ def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depend
     collection_rate  = round((total_collected / total_billed * 100), 1) if total_billed > 0 else 0
     # Leakage Risk Index: weighted sum of risk exposures.
     # Weights derived from ACFE (2022) Revenue Assurance Framework:
-    #   40% of unreconciled payments â†’ confirmed leakage (cash received, not tracked)
-    #   25% of overdue balance â†’ at-risk revenue (NCC 2023: 25% recovery rate for overdue >90d)
+    #   40% of unreconciled payments â†' confirmed leakage (cash received, not tracked)
+    #   25% of overdue balance â†' at-risk revenue (NCC 2023: 25% recovery rate for overdue >90d)
     overdue_bal   = db.query(func.sum(Invoice.balance)).filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
     unrecon_amt   = db.query(func.sum(Payment.amount)).filter(Payment.is_reconciled == False).scalar() or 0
     leakage_estimate = round(unrecon_amt * 0.40 + overdue_bal * 0.25, 2)
@@ -618,7 +618,7 @@ def refresh_overdue(db: Session = Depends(get_db),
     count = refresh_overdue_invoices(db)
     return {"updated_invoices": count, "message": f"Marked {count} invoice(s) as overdue"}
 
-# â”€â”€â”€ Ratepayers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Ratepayers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/ratepayers")
 def list_ratepayers(search: Optional[str] = None, zone: Optional[str] = None,
@@ -695,7 +695,7 @@ def delete_ratepayer(rp_id: int, db: Session = Depends(get_db),
     db.delete(rp); db.commit()
     return {"message": "Ratepayer deleted"}
 
-# â”€â”€â”€ Invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Invoices â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/invoices")
 def list_invoices(status: Optional[str] = None, category: Optional[str] = None,
@@ -792,7 +792,7 @@ def delete_invoice(inv_id: int, db: Session = Depends(get_db),
     db.delete(inv); db.commit()
     return {"message": "Invoice deleted"}
 
-# â”€â”€â”€ Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Payments â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/payments")
 def list_payments(reconciled: Optional[bool] = None, ratepayer_id: Optional[int] = None,
@@ -826,9 +826,9 @@ def record_payment(data: PaymentCreate, background_tasks: BackgroundTasks,
     rcpt  = "RCP-" + "".join(random.choices(string.digits, k=8))
     flag  = AnomalyFlag.none; reason = None
     if not data.invoice_id:
-        # Unlinked payment â€” primary leakage risk: money received with no audit trail to an invoice
+        # Unlinked payment - primary leakage risk: money received with no audit trail to an invoice
         flag = AnomalyFlag.medium
-        reason = "Payment recorded without invoice reference â€” unlinked cash increases leakage risk"
+        reason = "Payment recorded without invoice reference - unlinked cash increases leakage risk"
     # Z-score check: is this amount anomalous vs this ratepayer's payment history?
     rp_amounts = [r[0] for r in db.query(Payment.amount)
                   .filter(Payment.ratepayer_id == data.ratepayer_id).all()]
@@ -871,7 +871,7 @@ def record_payment(data: PaymentCreate, background_tasks: BackgroundTasks,
 def reconcile_payment(pmt_id: int, db: Session = Depends(get_db),
                        current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant, UserRole.auditor))):
     """
-    Enhanced reconciliation â€” records who reconciled and when (IMPROVEMENT 14).
+    Enhanced reconciliation - records who reconciled and when (IMPROVEMENT 14).
     Restricted to admin, accountant, and auditor roles for segregation of duties.
     """
     pmt = db.query(Payment).filter(Payment.id == pmt_id).first()
@@ -908,7 +908,7 @@ def delete_payment(pmt_id: int, db: Session = Depends(get_db),
     db.delete(pmt); db.commit()
     return {"message": "Payment deleted"}
 
-# â”€â”€â”€ Expenditures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Expenditures â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/expenditures")
 def list_expenditures(skip: int = 0, limit: int = 100, department: Optional[str] = None,
@@ -979,7 +979,7 @@ def delete_expenditure(exp_id: int, db: Session = Depends(get_db),
     db.delete(e); db.commit()
     return {"message": "Expenditure deleted"}
 
-# â”€â”€â”€ Budgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Budgets â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/budgets")
 def list_budgets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -1035,7 +1035,7 @@ def delete_budget(bud_id: int,
     db.delete(b); db.commit()
     return {"message": "Budget deleted"}
 
-# â”€â”€â”€ Leakage & Anomalies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Leakage & Anomalies â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/leakage/summary")
 def leakage_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -1052,7 +1052,7 @@ def leakage_summary(db: Session = Depends(get_db), current_user: User = Depends(
         "unreconciled_amount": round(unreconciled_amt, 2),
         "overdue_balance": round(overdue_amt, 2),
         "active_alerts": len(alerts),
-        # Leakage Risk Index â€” ACFE (2022) weighted model:
+        # Leakage Risk Index - ACFE (2022) weighted model:
         # 40% of unreconciled payments (cash received, no audit trail) +
         # 25% of overdue balance (NCC 2023: <25% recovery probability beyond 90 days)
         "estimated_leakage": round(unreconciled_amt * 0.40 + overdue_amt * 0.25, 2)
@@ -1094,11 +1094,11 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
     Dynamically scan the database for revenue leakage patterns and generate alerts.
     Implements five detection rules derived from the City of Harare stakeholder
     interviews and ACFE (2022) fraud pattern taxonomy:
-      1. Ghost accounts â€” active ratepayers with no payment in 12+ months but outstanding balances
-      2. Waiver abuse â€” waivers that exceed the ward's historical waiver rate by >2Ïƒ
-      3. Unlinked cash â€” unreconciled cash payments with no invoice reference
-      4. Officer collection gap â€” revenue officers collecting significantly below peers (Z-score)
-      5. Stale high-value overdue â€” overdue invoices >180 days with balance >$500
+      1. Ghost accounts - active ratepayers with no payment in 12+ months but outstanding balances
+      2. Waiver abuse - waivers that exceed the ward's historical waiver rate by >2Ïƒ
+      3. Unlinked cash - unreconciled cash payments with no invoice reference
+      4. Officer collection gap - revenue officers collecting significantly below peers (Z-score)
+      5. Stale high-value overdue - overdue invoices >180 days with balance >$500
     """
     cutoff_12m  = now() - timedelta(days=365)
     cutoff_180d = now() - timedelta(days=180)
@@ -1112,7 +1112,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
             LeakageAlert.is_resolved == False
         ).first() is not None
 
-    # â”€â”€ Rule 1: Ghost accounts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 1: Ghost accounts â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     active_rps = db.query(Ratepayer).filter(Ratepayer.is_active == True).all()
     for rp in active_rps:
         outstanding = db.query(func.sum(Invoice.balance))\
@@ -1127,12 +1127,12 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
                     alert_type="ghost_account", severity="high",
                     description=(f"Ratepayer {rp.account_number} ({rp.full_name}) has "
                                  f"${outstanding:,.2f} outstanding but no payment in >12 months. "
-                                 f"Possible ghost account or inactive debtor â€” review for write-off or enforcement."),
+                                 f"Possible ghost account or inactive debtor - review for write-off or enforcement."),
                     related_record_id=rp.id, related_table="ratepayers"
                 ))
                 generated += 1
 
-    # â”€â”€ Rule 2: Unlinked cash payments (unreconciled, no invoice) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 2: Unlinked cash payments (unreconciled, no invoice) â"€â"€â"€â"€â"€â"€â"€â"€â"€
     unlinked = db.query(Payment).filter(
         Payment.invoice_id == None,
         Payment.is_reconciled == False,
@@ -1149,7 +1149,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
             ))
             generated += 1
 
-    # â”€â”€ Rule 3: Stale high-value overdue invoices (>180 days, >$500) â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 3: Stale high-value overdue invoices (>180 days, >$500) â"€â"€â"€â"€â"€
     stale = db.query(Invoice).filter(
         Invoice.status == PaymentStatus.overdue,
         Invoice.due_date < cutoff_180d,
@@ -1166,7 +1166,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
             ))
             generated += 1
 
-    # â”€â”€ Rule 4: Officer collection gap (Z-score on collection rates) â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 4: Officer collection gap (Z-score on collection rates) â"€â"€â"€â"€â"€â"€
     officers = db.query(User).filter(User.role == UserRole.revenue_officer, User.is_active == True).all()
     officer_rates = []
     for officer in officers:
@@ -1194,12 +1194,12 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
                         alert_type="officer_gap", severity="medium",
                         description=(f"Revenue officer {officer.full_name} has a collection rate "
                                      f"of {rate:.1f}% vs peer average {mean_rate:.1f}% "
-                                     f"(Z-score {z:.2f}). Significantly below peers â€” review workload or escalate."),
+                                     f"(Z-score {z:.2f}). Significantly below peers - review workload or escalate."),
                         related_record_id=officer.id, related_table="users"
                     ))
                     generated += 1
 
-    # â”€â”€ Rule 5: Waived invoices without approval audit trail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 5: Waived invoices without approval audit trail â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     waived = db.query(Invoice).filter(Invoice.status == PaymentStatus.waived).all()
     for inv in waived:
         if not _alert_exists("waiver_no_audit", inv.id, "invoices"):
@@ -1219,7 +1219,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
                 ))
                 generated += 1
 
-    # â”€â”€ Rule 6: Duplicate payments (same ratepayer, amount, same day) â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 6: Duplicate payments (same ratepayer, amount, same day) â"€â"€â"€â"€â"€â"€â"€â"€
     from sqlalchemy import func as _func
     dup_query = db.query(
         Payment.ratepayer_id, Payment.amount,
@@ -1250,7 +1250,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
             ))
             generated += 1
 
-    # â”€â”€ Rule 7: Round-trip â€” waiver and payment on same account, same day â”€â”€â”€â”€â”€
+    # â"€â"€ Rule 7: Round-trip - waiver and payment on same account, same day â"€â"€â"€â"€â"€
     waived_invs = db.query(Invoice).filter(Invoice.status == PaymentStatus.waived).all()
     for winv in waived_invs:
         pmt_same_day = db.query(Payment).filter(
@@ -1272,18 +1272,18 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
         background_tasks.add_task(ws_manager.broadcast, {
             "type": "leakage_scan",
             "generated": generated,
-            "message": f"{generated} new leakage alert(s) detected — refresh your dashboard"
+            "message": f"{generated} new leakage alert(s) detected - refresh your dashboard"
         })
-    return {“generated”: generated, “message”: f”{generated} new alert(s) generated from leakage scan (7 rules)”}
+    return {"generated": generated, "message": f"{generated} new alert(s) generated from leakage scan (7 rules)"}
 
 # ─── Leakage Quantification (Dissertation Objective 2) ──────────────────────
 
-@app.get(“/api/leakage/quantification”)
+@app.get("/api/leakage/quantification")
 def leakage_quantification(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    “””
+    """
     Quantifies revenue leakage by category and by leakage type.
     Provides dollar amounts, percentages, and a Leakage Risk Index for
     dissertation Objective 2 (revenue leakage measurement).
@@ -1294,7 +1294,7 @@ def leakage_quantification(
       - Overdue balances:   25% (NCC 2023: <25% recovery probability >90 days)
       - Unauthorized waivers: 15% (direct write-off leakage)
       - Anomalous invoices: 10% (billing fraud indicator)
-    “””
+    """
     total_billed = db.query(func.sum(Invoice.amount)).scalar() or 0
 
     # ── By revenue category ──────────────────────────────────────────────
@@ -1308,22 +1308,22 @@ def leakage_quantification(
             Invoice.category == cat, Invoice.anomaly_flag != AnomalyFlag.none).scalar() or 0
         est_leakage  = round(overdue_bal * 0.25 + anomaly_amt * 0.10, 2)
         by_category.append({
-            “category”:          cat,
-            “billed”:            round(billed, 2),
-            “collected”:         round(collected, 2),
-            “outstanding”:       round(billed - collected, 2),
-            “overdue_balance”:   round(overdue_bal, 2),
-            “anomaly_amount”:    round(anomaly_amt, 2),
-            “estimated_leakage”: est_leakage,
-            “leakage_pct”:       round(est_leakage / billed * 100, 1) if billed > 0 else 0,
-            “collection_rate”:   round(collected / billed * 100, 1) if billed > 0 else 0,
+            "category":          cat,
+            "billed":            round(billed, 2),
+            "collected":         round(collected, 2),
+            "outstanding":       round(billed - collected, 2),
+            "overdue_balance":   round(overdue_bal, 2),
+            "anomaly_amount":    round(anomaly_amt, 2),
+            "estimated_leakage": est_leakage,
+            "leakage_pct":       round(est_leakage / billed * 100, 1) if billed > 0 else 0,
+            "collection_rate":   round(collected / billed * 100, 1) if billed > 0 else 0,
         })
 
     # ── By leakage type ──────────────────────────────────────────────────
     unrecon_cash  = db.query(func.sum(Payment.amount)).filter(
-        Payment.is_reconciled == False, Payment.payment_method == “cash”).scalar() or 0
+        Payment.is_reconciled == False, Payment.payment_method == "cash").scalar() or 0
     unrecon_other = db.query(func.sum(Payment.amount)).filter(
-        Payment.is_reconciled == False, Payment.payment_method != “cash”).scalar() or 0
+        Payment.is_reconciled == False, Payment.payment_method != "cash").scalar() or 0
     overdue_total = db.query(func.sum(Invoice.balance)).filter(
         Invoice.status == PaymentStatus.overdue).scalar() or 0
     waived_total  = db.query(func.sum(Invoice.amount)).filter(
@@ -1332,51 +1332,51 @@ def leakage_quantification(
         Invoice.anomaly_flag != AnomalyFlag.none).scalar() or 0
 
     by_type = [
-        {“type”: “Unreconciled Cash”,       “raw”: round(unrecon_cash, 2),  “leakage”: round(unrecon_cash  * 0.40, 2), “weight”: 0.40,
-         “description”: “Cash received but not reconciled to an invoice — primary leakage vector (ACFE, 2022)”},
-        {“type”: “Unreconciled Non-Cash”,   “raw”: round(unrecon_other, 2), “leakage”: round(unrecon_other * 0.20, 2), “weight”: 0.20,
-         “description”: “EFT/cheque payments unreconciled — reduced weight vs cash (ACFE, 2022)”},
-        {“type”: “Overdue Balances”,        “raw”: round(overdue_total, 2), “leakage”: round(overdue_total * 0.25, 2), “weight”: 0.25,
-         “description”: “Outstanding overdue invoices — 25% recovery weight (NCC, 2023: <25% recovery >90 days)”},
-        {“type”: “Unauthorized Waivers”,    “raw”: round(waived_total, 2),  “leakage”: round(waived_total  * 0.15, 2), “weight”: 0.15,
-         “description”: “Waived invoice amounts — direct revenue write-off (ZIMRA, 2023)”},
-        {“type”: “Anomalous Invoices”,      “raw”: round(anomaly_total, 2), “leakage”: round(anomaly_total * 0.10, 2), “weight”: 0.10,
-         “description”: “Invoices flagged by Isolation Forest anomaly detection (Liu, Ting & Zhou, 2008)”},
+        {"type": "Unreconciled Cash",       "raw": round(unrecon_cash, 2),  "leakage": round(unrecon_cash  * 0.40, 2), "weight": 0.40,
+         "description": "Cash received but not reconciled to an invoice - primary leakage vector (ACFE, 2022)"},
+        {"type": "Unreconciled Non-Cash",   "raw": round(unrecon_other, 2), "leakage": round(unrecon_other * 0.20, 2), "weight": 0.20,
+         "description": "EFT/cheque payments unreconciled - reduced weight vs cash (ACFE, 2022)"},
+        {"type": "Overdue Balances",        "raw": round(overdue_total, 2), "leakage": round(overdue_total * 0.25, 2), "weight": 0.25,
+         "description": "Outstanding overdue invoices - 25% recovery weight (NCC, 2023: <25% recovery >90 days)"},
+        {"type": "Unauthorized Waivers",    "raw": round(waived_total, 2),  "leakage": round(waived_total  * 0.15, 2), "weight": 0.15,
+         "description": "Waived invoice amounts - direct revenue write-off (ZIMRA, 2023)"},
+        {"type": "Anomalous Invoices",      "raw": round(anomaly_total, 2), "leakage": round(anomaly_total * 0.10, 2), "weight": 0.10,
+         "description": "Invoices flagged by Isolation Forest anomaly detection (Liu, Ting & Zhou, 2008)"},
     ]
-    by_type.sort(key=lambda x: -x[“leakage”])
+    by_type.sort(key=lambda x: -x["leakage"])
 
-    total_leakage  = round(sum(t[“leakage”] for t in by_type), 2)
+    total_leakage  = round(sum(t["leakage"] for t in by_type), 2)
     leakage_rate   = round(total_leakage / total_billed * 100, 1) if total_billed > 0 else 0
-    high_risk_cats = [c for c in by_category if c[“leakage_pct”] >= 10]
+    high_risk_cats = [c for c in by_category if c["leakage_pct"] >= 10]
 
     return {
-        “total_billed”:       round(total_billed, 2),
-        “total_leakage”:      total_leakage,
-        “leakage_rate_pct”:   leakage_rate,
-        “by_category”:        sorted(by_category, key=lambda x: -x[“estimated_leakage”]),
-        “by_type”:            by_type,
-        “high_risk_categories”: [c[“category”] for c in high_risk_cats],
-        “methodology”: (
-            “ACFE (2022) Revenue Assurance Framework — weighted risk model. “
-            “Anomaly detection: Isolation Forest (Liu, Ting & Zhou, 2008, IEEE ICDM). “
-            “Overdue recovery estimate: NCC (2023) Municipal Revenue Recovery Report.”
+        "total_billed":       round(total_billed, 2),
+        "total_leakage":      total_leakage,
+        "leakage_rate_pct":   leakage_rate,
+        "by_category":        sorted(by_category, key=lambda x: -x["estimated_leakage"]),
+        "by_type":            by_type,
+        "high_risk_categories": [c["category"] for c in high_risk_cats],
+        "methodology": (
+            "ACFE (2022) Revenue Assurance Framework - weighted risk model. "
+            "Anomaly detection: Isolation Forest (Liu, Ting & Zhou, 2008, IEEE ICDM). "
+            "Overdue recovery estimate: NCC (2023) Municipal Revenue Recovery Report."
         ),
-        “generated_at”: str(now())
+        "generated_at": str(now())
     }
 
 # ─── Leakage Cause Analysis (Dissertation Objective 1) ──────────────────────
 
-@app.get(“/api/leakage/cause-analysis”)
+@app.get("/api/leakage/cause-analysis")
 def leakage_cause_analysis(
     months: int = Query(6, ge=3, le=24),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    “””
+    """
     Historical month-by-month leakage cause analysis for dissertation Objective 1.
     Decomposes estimated leakage into three root causes per month and fits
     a linear trend (OLS) to identify whether leakage is improving or worsening.
-    “””
+    """
     monthly = []
     for i in range(months, 0, -1):
         ref   = now().replace(day=1) - timedelta(days=28 * (i - 1))
@@ -1406,63 +1406,63 @@ def leakage_cause_analysis(
         total_leakage        = round(unreconciled_leakage + overdue_leakage + anomaly_leakage, 2)
 
         monthly.append({
-            “month”:                 ms.strftime(“%b %Y”),
-            “billed”:                round(billed, 2),
-            “collected”:             round(collected, 2),
-            “collection_gap”:        round(billed - collected, 2),
-            “unreconciled_leakage”:  unreconciled_leakage,
-            “overdue_leakage”:       overdue_leakage,
-            “anomaly_leakage”:       anomaly_leakage,
-            “total_estimated_leakage”: total_leakage,
-            “leakage_rate_pct”:      round(total_leakage / billed * 100, 1) if billed > 0 else 0,
+            "month":                 ms.strftime("%b %Y"),
+            "billed":                round(billed, 2),
+            "collected":             round(collected, 2),
+            "collection_gap":        round(billed - collected, 2),
+            "unreconciled_leakage":  unreconciled_leakage,
+            "overdue_leakage":       overdue_leakage,
+            "anomaly_leakage":       anomaly_leakage,
+            "total_estimated_leakage": total_leakage,
+            "leakage_rate_pct":      round(total_leakage / billed * 100, 1) if billed > 0 else 0,
         })
 
     # OLS linear trend on total leakage
-    vals = [m[“total_estimated_leakage”] for m in monthly]
+    vals = [m["total_estimated_leakage"] for m in monthly]
     n = len(vals)
     x = list(range(n)); mx = sum(x) / n; my = sum(vals) / n
     num = sum((x[i] - mx) * (vals[i] - my) for i in range(n))
     den = sum((xi - mx) ** 2 for xi in x)
     slope = round(num / den, 2) if den != 0 else 0
     if abs(slope) < 50:
-        trend = “stable”
+        trend = "stable"
     elif slope > 0:
-        trend = “worsening”
+        trend = "worsening"
     else:
-        trend = “improving”
+        trend = "improving"
 
     # Aggregate cause totals
-    all_unrecon  = round(sum(m[“unreconciled_leakage”] for m in monthly), 2)
-    all_overdue  = round(sum(m[“overdue_leakage”] for m in monthly), 2)
-    all_anomaly  = round(sum(m[“anomaly_leakage”] for m in monthly), 2)
+    all_unrecon  = round(sum(m["unreconciled_leakage"] for m in monthly), 2)
+    all_overdue  = round(sum(m["overdue_leakage"] for m in monthly), 2)
+    all_anomaly  = round(sum(m["anomaly_leakage"] for m in monthly), 2)
     grand_total  = all_unrecon + all_overdue + all_anomaly or 1
 
     top_causes = sorted([
-        {“cause”: “Unreconciled Payments”, “total”: all_unrecon,
-         “share_pct”: round(all_unrecon / grand_total * 100, 1),
-         “description”: “Payments received but not matched to invoices (ACFE, 2022)”},
-        {“cause”: “Overdue Balances”,      “total”: all_overdue,
-         “share_pct”: round(all_overdue / grand_total * 100, 1),
-         “description”: “Invoices past due with low recovery probability (NCC, 2023)”},
-        {“cause”: “Anomalous Invoices”,    “total”: all_anomaly,
-         “share_pct”: round(all_anomaly / grand_total * 100, 1),
-         “description”: “Invoices flagged by Isolation Forest (Liu, Ting & Zhou, 2008)”},
-    ], key=lambda x: -x[“total”])
+        {"cause": "Unreconciled Payments", "total": all_unrecon,
+         "share_pct": round(all_unrecon / grand_total * 100, 1),
+         "description": "Payments received but not matched to invoices (ACFE, 2022)"},
+        {"cause": "Overdue Balances",      "total": all_overdue,
+         "share_pct": round(all_overdue / grand_total * 100, 1),
+         "description": "Invoices past due with low recovery probability (NCC, 2023)"},
+        {"cause": "Anomalous Invoices",    "total": all_anomaly,
+         "share_pct": round(all_anomaly / grand_total * 100, 1),
+         "description": "Invoices flagged by Isolation Forest (Liu, Ting & Zhou, 2008)"},
+    ], key=lambda x: -x["total"])
 
     return {
-        “months_analysed”:  months,
-        “monthly_trend”:    monthly,
-        “trend_direction”:  trend,
-        “slope_per_month”:  slope,
-        “top_causes”:       top_causes,
-        “total_leakage_period”: round(grand_total, 2),
-        “methodology”: (
-            “OLS linear regression on monthly leakage totals (Freedman, Pisani & Purves, 2007). “
-            “Leakage components weighted per ACFE (2022) Revenue Assurance Framework.”
+        "months_analysed":  months,
+        "monthly_trend":    monthly,
+        "trend_direction":  trend,
+        "slope_per_month":  slope,
+        "top_causes":       top_causes,
+        "total_leakage_period": round(grand_total, 2),
+        "methodology": (
+            "OLS linear regression on monthly leakage totals (Freedman, Pisani & Purves, 2007). "
+            "Leakage components weighted per ACFE (2022) Revenue Assurance Framework."
         )
     }
 
-# â”€â”€â”€ Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Audit Log â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/audit-logs")
 def get_audit_logs(skip: int = 0, limit: int = 50,
@@ -1485,7 +1485,7 @@ def get_audit_logs(skip: int = 0, limit: int = 50,
                         "ip_address": log.ip_address, "timestamp": str(log.timestamp)[:16]})
     return {"total": total, "items": result}
 
-# â”€â”€â”€ Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Users â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/users")
 def list_users(db: Session = Depends(get_db),
@@ -1546,7 +1546,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db),
     db.commit()
     return {"message": "User deactivated"}
 
-# â”€â”€â”€ Export Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Export Endpoints â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/export/ratepayers")
 def export_ratepayers(format: str = "csv", db: Session = Depends(get_db),
@@ -1559,7 +1559,7 @@ def export_ratepayers(format: str = "csv", db: Session = Depends(get_db),
              "Yes" if r.is_active else "No", str(r.created_at)[:10]] for r in items]
     return export_response(format, headers, rows,
                            "ratepayers.csv", "ratepayers.xlsx", "Ratepayers",
-                           "City of Harare FMS â€” Ratepayer Registry")
+                           "City of Harare FMS - Ratepayer Registry")
 
 @app.get("/api/export/invoices")
 def export_invoices(format: str = "csv", db: Session = Depends(get_db),
@@ -1576,7 +1576,7 @@ def export_invoices(format: str = "csv", db: Session = Depends(get_db),
                      str(inv.issue_date)[:10], str(inv.due_date)[:10], inv.anomaly_flag, inv.notes or ""])
     return export_response(format, headers, rows,
                            "invoices.csv", "invoices.xlsx", "Invoices",
-                           "City of Harare FMS â€” Invoice Register")
+                           "City of Harare FMS - Invoice Register")
 
 @app.get("/api/export/payments")
 def export_payments(format: str = "csv", db: Session = Depends(get_db),
@@ -1592,7 +1592,7 @@ def export_payments(format: str = "csv", db: Session = Depends(get_db),
                      "Yes" if p.is_reconciled else "No", p.anomaly_flag])
     return export_response(format, headers, rows,
                            "payments.csv", "payments.xlsx", "Payments",
-                           "City of Harare FMS â€” Payment Records")
+                           "City of Harare FMS - Payment Records")
 
 @app.get("/api/export/expenditures")
 def export_expenditures(format: str = "csv", db: Session = Depends(get_db),
@@ -1605,7 +1605,7 @@ def export_expenditures(format: str = "csv", db: Session = Depends(get_db),
              "Yes" if e.is_approved else "No", e.anomaly_flag] for e in items]
     return export_response(format, headers, rows,
                            "expenditures.csv", "expenditures.xlsx", "Expenditures",
-                           "City of Harare FMS â€” Expenditure Register")
+                           "City of Harare FMS - Expenditure Register")
 
 @app.get("/api/export/audit-logs")
 def export_audit_logs(format: str = "csv",
@@ -1624,7 +1624,7 @@ def export_audit_logs(format: str = "csv",
                      log.table_name, log.description or "", log.ip_address or "", str(log.timestamp)[:16]])
     return export_response(format, headers, rows,
                            "audit_trail.csv", "audit_trail.xlsx", "Audit Trail",
-                           "City of Harare FMS â€” Audit Trail")
+                           "City of Harare FMS - Audit Trail")
 
 @app.get("/api/export/budgets")
 def export_budgets(format: str = "csv", db: Session = Depends(get_db),
@@ -1639,7 +1639,7 @@ def export_budgets(format: str = "csv", db: Session = Depends(get_db),
                      b.allocated_amount, b.spent_amount, b.remaining, util])
     return export_response(format, headers, rows,
                            "budgets.csv", "budgets.xlsx", "Budgets",
-                           "City of Harare FMS â€” Budget Register")
+                           "City of Harare FMS - Budget Register")
 
 @app.get("/api/export/leakage")
 def export_leakage(format: str = "csv", db: Session = Depends(get_db),
@@ -1654,7 +1654,7 @@ def export_leakage(format: str = "csv", db: Session = Depends(get_db),
              str(a.resolved_at)[:16] if a.resolved_at else ""] for a in items]
     return export_response(format, headers, rows,
                            "leakage_alerts.csv", "leakage_alerts.xlsx", "Leakage Alerts",
-                           "City of Harare FMS â€” Revenue Leakage Alerts")
+                           "City of Harare FMS - Revenue Leakage Alerts")
 
 @app.get("/api/export/users")
 def export_users(format: str = "csv", db: Session = Depends(get_db),
@@ -1669,9 +1669,9 @@ def export_users(format: str = "csv", db: Session = Depends(get_db),
              u.failed_login_count] for u in items]
     return export_response(format, headers, rows,
                            "users.csv", "users.xlsx", "Users",
-                           "City of Harare FMS â€” User Registry")
+                           "City of Harare FMS - User Registry")
 
-# â”€â”€â”€ Import Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Import Endpoints â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.post("/api/import/ratepayers")
 async def import_ratepayers(file: UploadFile = File(...),
@@ -1771,7 +1771,7 @@ async def import_budgets(file: UploadFile = File(...),
     return {"created": created, "updated": updated, "errors": errors,
             "message": f"{created} created, {updated} updated"}
 
-# â”€â”€â”€ Import Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Import Templates â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/templates/{entity}")
 def download_template(entity: str, format: str = "csv",
@@ -1795,9 +1795,9 @@ def download_template(entity: str, format: str = "csv",
     return export_response(format, headers, sample,
                            f"template_{entity}.csv", f"template_{entity}.xlsx",
                            f"{entity.title()} Template",
-                           f"City of Harare FMS â€” {entity.title()} Import Template")
+                           f"City of Harare FMS - {entity.title()} Import Template")
 
-# â”€â”€â”€ Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Reports â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/budget-variance")
 def report_budget_variance(format: str = "json", db: Session = Depends(get_db),
@@ -1830,7 +1830,7 @@ def report_budget_variance(format: str = "json", db: Session = Depends(get_db),
                "Actual Spent ($)", "Variance ($)", "Variance (%)", "Status"]
     return export_response(format, headers, rows_data,
                            "budget_variance_report.csv", "budget_variance_report.xlsx",
-                           "Budget Variance", "City of Harare FMS â€” Budget Variance Report")
+                           "Budget Variance", "City of Harare FMS - Budget Variance Report")
 
 @app.get("/api/reports/financial-summary")
 def report_financial_summary(format: str = "json", db: Session = Depends(get_db),
@@ -1870,7 +1870,7 @@ def report_financial_summary(format: str = "json", db: Session = Depends(get_db)
                "Outstanding ($)", "Collection Rate (%)"]
     return export_response(format, headers, rows_data,
                            "financial_summary.csv", "financial_summary.xlsx",
-                           "Financial Summary", "City of Harare FMS â€” Financial Summary Report")
+                           "Financial Summary", "City of Harare FMS - Financial Summary Report")
 
 @app.get("/api/reports/audit-trail")
 def report_audit_trail(format: str = "csv",
@@ -1880,7 +1880,7 @@ def report_audit_trail(format: str = "csv",
     return export_audit_logs(format=format, date_from=date_from, date_to=date_to,
                               db=db, current_user=current_user)
 
-# â”€â”€â”€ Aging Analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Aging Analysis â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def _aging_bucket(days: int) -> str:
     if days <= 0:   return "current"
@@ -1940,7 +1940,7 @@ def debtors_aging(format: str = "json", zone: Optional[str] = None,
                      [totals[k] for k in AGING_KEYS] + [totals["total"]])
     return export_response(format, headers, data_rows,
                            "debtors_aging.csv", "debtors_aging.xlsx",
-                           "Debtors Aging", "City of Harare FMS â€” Debtors Aging Analysis")
+                           "Debtors Aging", "City of Harare FMS - Debtors Aging Analysis")
 
 @app.get("/api/aging/creditors")
 def creditors_aging(format: str = "json", department: Optional[str] = None,
@@ -1997,9 +1997,9 @@ def creditors_aging(format: str = "json", department: Optional[str] = None,
                      [totals[k] for k in AGING_KEYS] + [totals["total"]])
     return export_response(format, headers, data_rows,
                            "creditors_aging.csv", "creditors_aging.xlsx",
-                           "Creditors Aging", "City of Harare FMS â€” Creditors Aging Analysis")
+                           "Creditors Aging", "City of Harare FMS - Creditors Aging Analysis")
 
-# â”€â”€â”€ Revenue Targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Revenue Targets â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/revenue-targets")
 def list_revenue_targets(fiscal_year: Optional[str] = None,
@@ -2099,7 +2099,7 @@ async def import_revenue_targets(file: UploadFile = File(...),
     return {"created": created, "updated": updated, "errors": errors,
             "message": f"{created} created, {updated} updated"}
 
-# â”€â”€â”€ COH Historical Dataset Import â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ COH Historical Dataset Import â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 COH_DATASET_PATH = r"C:\Users\Gigi\Documents\Terry Work\Dissertation\COH_Official_Financial_Dataset.xlsx"
 
@@ -2119,7 +2119,7 @@ def import_coh_dataset(db: Session = Depends(get_db),
                "expenditures": {"created": 0},
                "errors": []}
 
-    # â”€â”€ Sheet 1: Revenue Trend 2021-2025 â†’ RevenueTarget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Sheet 1: Revenue Trend 2021-2025 â†' RevenueTarget â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     CATEGORY_MAP = {
         "property taxes": "rates", "rates": "rates",
         "water & sanitation": "water", "water": "water",
@@ -2177,7 +2177,7 @@ def import_coh_dataset(db: Session = Depends(get_db),
                             created_by=current_user.id))
                         summary["revenue_targets"]["created"] += 1
 
-    # â”€â”€ Sheet: Revenue vs Budget 2025 â†’ Budget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Sheet: Revenue vs Budget 2025 â†' Budget â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     if "Revenue vs Budget 2025" in wb.sheetnames:
         ws = wb["Revenue vs Budget 2025"]
         rows_iter = list(ws.iter_rows(values_only=True))
@@ -2207,7 +2207,7 @@ def import_coh_dataset(db: Session = Depends(get_db),
                     spent_amount=spent, remaining=allocated - spent))
                 summary["budgets"]["created"] += 1
 
-    # â”€â”€ Sheet: Expenditure by Dept 2025 â†’ Budget (expenditure side) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Sheet: Expenditure by Dept 2025 â†' Budget (expenditure side) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     if "Expenditure by Dept 2025" in wb.sheetnames:
         ws = wb["Expenditure by Dept 2025"]
         rows_iter = list(ws.iter_rows(values_only=True))
@@ -2252,7 +2252,7 @@ def import_coh_dataset(db: Session = Depends(get_db),
         "errors": summary["errors"]
     }
 
-# â”€â”€â”€ Performance Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Performance Report â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/performance")
 def report_performance(fiscal_year: Optional[str] = None,
@@ -2266,8 +2266,8 @@ def report_performance(fiscal_year: Optional[str] = None,
                         func.sum(Invoice.amount_paid).label("collected"),
                         func.sum(Invoice.balance).label("outstanding"))
     if fiscal_year:
-        # Approximate fiscal year filter â€” assumes fiscal_year like "2025/2026"
-        # Map to year range: "2025/2026" â†’ 2025-07-01 to 2026-06-30
+        # Approximate fiscal year filter - assumes fiscal_year like "2025/2026"
+        # Map to year range: "2025/2026" â†' 2025-07-01 to 2026-06-30
         try:
             yr_start = int(fiscal_year.split("/")[0])
             start_dt = datetime(yr_start, 7, 1)
@@ -2289,7 +2289,7 @@ def report_performance(fiscal_year: Optional[str] = None,
     rows_json = []
     rows_data = []
 
-    # Merge targets with actuals â€” show all categories that have either a target or actual
+    # Merge targets with actuals - show all categories that have either a target or actual
     all_cats = set(actual_by_cat.keys()) | {t.category for t in targets}
     tgt_map  = {t.category: t.target_amount for t in targets}
 
@@ -2324,9 +2324,9 @@ def report_performance(fiscal_year: Optional[str] = None,
                 "Outstanding ($)", "Collection Rate", "Variance ($)", "Variance (%)", "Status"]
     return export_response(format, headers, rows_data,
                            "performance_report.csv", "performance_report.xlsx",
-                           "Performance", f"City of Harare FMS â€” Revenue Performance Report ({fy_label})")
+                           "Performance", f"City of Harare FMS - Revenue Performance Report ({fy_label})")
 
-# â”€â”€â”€ Root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Root â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
@@ -2336,11 +2336,11 @@ def favicon():
 def root():
     return FileResponse(os.path.join(frontend_path, "pages", "login.html"))
 
-# â”€â”€â”€ Health Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Health Check â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
-    """System health endpoint â€” verifies API and database are operational."""
+    """System health endpoint - verifies API and database are operational."""
     try:
         user_count = db.query(User).count()
         return {
@@ -2354,7 +2354,7 @@ def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
 
-# â”€â”€â”€ Bulk Reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Bulk Reconciliation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.post("/api/payments/reconcile-all")
 def bulk_reconcile(
@@ -2375,7 +2375,7 @@ def bulk_reconcile(
     db.commit()
     return {"reconciled": count, "message": f"{count} payment(s) reconciled successfully"}
 
-# â”€â”€â”€ Collection Rate Trend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Collection Rate Trend â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/collection-rate-trend")
 def collection_rate_trend(
@@ -2383,7 +2383,7 @@ def collection_rate_trend(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Monthly collection rate trend for the past N months â€” drives the key dissertation chart."""
+    """Monthly collection rate trend for the past N months - drives the key dissertation chart."""
     result = []
     for i in range(months, 0, -1):
         # Calculate start and end of each month
@@ -2417,7 +2417,7 @@ def collection_rate_trend(
         })
     return result
 
-# â”€â”€â”€ Ratepayer Statement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Ratepayer Statement â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/ratepayers/{rp_id}/statement")
 def ratepayer_statement(
@@ -2426,7 +2426,7 @@ def ratepayer_statement(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Full account statement for a ratepayer â€” invoices, payments, balance.
+    Full account statement for a ratepayer - invoices, payments, balance.
     Used for generating printable statements to send to ratepayers.
     """
     rp = db.query(Ratepayer).filter(Ratepayer.id == rp_id).first()
@@ -2488,7 +2488,7 @@ def ratepayer_statement(
         "generated_by": current_user.full_name
     }
 
-# â”€â”€â”€ Officer Performance Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Officer Performance Report â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/officer-performance")
 def officer_performance_report(
@@ -2498,7 +2498,7 @@ def officer_performance_report(
     ))
 ):
     """
-    Revenue officer performance comparison â€” collection rates, invoice counts,
+    Revenue officer performance comparison - collection rates, invoice counts,
     and Z-score deviation from team average.
     Addresses D11 open-ended responses: 'automated management reports to reduce manual compilation'.
     """
@@ -2559,7 +2559,7 @@ def officer_performance_report(
         "generated_at": str(now())[:16]
     }
 
-# â”€â”€â”€ Cashflow Forecast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Cashflow Forecast â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/cashflow-forecast")
 def cashflow_forecast(
@@ -2569,8 +2569,8 @@ def cashflow_forecast(
 ):
     """
     Simple cashflow forecast for the next N months based on:
-    - Expected receipts: pending invoices due in the period Ã— historical collection rate
-    - Expected payments: budget allocation / 12 Ã— months_ahead
+    - Expected receipts: pending invoices due in the period Ã- historical collection rate
+    - Expected payments: budget allocation / 12 Ã- months_ahead
     Addresses D11 open-ended feature request: 'cash flow forecasting'.
     """
     # Historical collection rate (last 90 days)
@@ -2625,7 +2625,7 @@ def cashflow_forecast(
         "generated_at": str(now())[:16]
     }
 
-# â”€â”€â”€ Full Database Backup Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Full Database Backup Export â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/export/full-backup")
 def full_database_backup(
@@ -2727,7 +2727,7 @@ def full_database_backup(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-# â”€â”€â”€ Management Summary Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Management Summary Report â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/management-summary")
 def management_summary_report(
@@ -2736,7 +2736,7 @@ def management_summary_report(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Consolidated management summary report â€” all key metrics in one endpoint.
+    Consolidated management summary report - all key metrics in one endpoint.
     Designed to satisfy D11 requirement: 'export functions to produce management reports
     that can be tabled at Council meetings without manual compilation.'
     """
@@ -2771,7 +2771,7 @@ def management_summary_report(
     budget_utilisation = round(total_spent / total_budget * 100, 1) if total_budget > 0 else 0
 
     summary = {
-        "report_title": "City of Harare â€” Financial Management Summary",
+        "report_title": "City of Harare - Financial Management Summary",
         "generated_at": str(now())[:16],
         "generated_by": current_user.full_name,
         "revenue": {
@@ -2836,16 +2836,16 @@ def management_summary_report(
         headers, rows,
         f"COH_Management_Summary_{now().strftime('%Y%m%d')}.xlsx",
         "Management Summary",
-        "City of Harare FMS â€” Management Summary Report"
+        "City of Harare FMS - Management Summary Report"
     )
 
 
 # =============================================================================
-# â”€â”€â”€ IMPROVEMENTS v2.1 â€” New Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ IMPROVEMENTS v2.1 - New Endpoints â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 # All endpoints below are additions to the base v2.0 system.
 # =============================================================================
 
-# â”€â”€â”€ Security: Login Attempts & Account Unlock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Security: Login Attempts & Account Unlock â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/security/login-attempts")
 def get_login_attempts(
@@ -2881,7 +2881,7 @@ def unlock_user_account(
     db.commit()
     return {"message": f"Account '{user.username}' has been unlocked"}
 
-# â”€â”€â”€ AI: Risk Scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ AI: Risk Scoring â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.post("/api/ai/compute-risk-scores")
 def compute_all_risk_scores(
@@ -2890,7 +2890,7 @@ def compute_all_risk_scores(
 ):
     """
     Run AI risk scoring across all active ratepayers and update risk_score and risk_label.
-    Weighted additive model â€” ZIMRA (2023) Taxpayer Risk Segmentation Framework (IMPROVEMENT 4).
+    Weighted additive model - ZIMRA (2023) Taxpayer Risk Segmentation Framework (IMPROVEMENT 4).
     """
     ratepayers = db.query(Ratepayer).filter(Ratepayer.is_active == True).all()
     high_count = medium_count = low_count = 0
@@ -2916,7 +2916,7 @@ def get_risk_register(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Risk register â€” all ratepayers ordered by risk score descending (IMPROVEMENT 4)."""
+    """Risk register - all ratepayers ordered by risk score descending (IMPROVEMENT 4)."""
     q = db.query(Ratepayer).filter(Ratepayer.is_active == True)
     if risk_label: q = q.filter(Ratepayer.risk_label == risk_label)
     rps = q.order_by(desc(Ratepayer.risk_score)).all()
@@ -2926,7 +2926,7 @@ def get_risk_register(
              "risk_updated_at": str(rp.risk_updated_at)[:16] if rp.risk_updated_at else None}
             for rp in rps]
 
-# â”€â”€â”€ AI: Revenue Prediction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ AI: Revenue Prediction â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/ai/revenue-prediction")
 def revenue_prediction(
@@ -2939,7 +2939,7 @@ def revenue_prediction(
     """
     return predict_next_month_revenue(db)
 
-# â”€â”€â”€ AI: Duplicate Invoice Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ AI: Duplicate Invoice Check â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.post("/api/invoices/check-duplicate")
 def check_duplicate_invoice(
@@ -2963,7 +2963,7 @@ def check_duplicate_invoice(
                 "warning": f"Invoice {existing.invoice_number} already exists with identical ratepayer, category, amount, and due date."}
     return {"is_duplicate": False}
 
-# â”€â”€â”€ Payment Plans â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Payment Plans â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/payment-plans")
 def list_payment_plans(
@@ -3015,7 +3015,7 @@ def create_payment_plan(
     db.add(plan); db.flush()
     db.add(AuditLog(user_id=current_user.id, action="CREATE", table_name="payment_plans",
                     record_id=plan.id,
-                    description=f"Payment plan created for {rp.full_name}: ${data.instalment_amount}/{data.frequency} Ã— {data.total_instalments}"))
+                    description=f"Payment plan created for {rp.full_name}: ${data.instalment_amount}/{data.frequency} Ã- {data.total_instalments}"))
     db.commit(); db.refresh(plan)
     return {"message": "Payment plan created", "id": plan.id}
 
@@ -3029,7 +3029,7 @@ def record_instalment(
     plan = db.query(PaymentPlan).filter(PaymentPlan.id == plan_id).first()
     if not plan: raise HTTPException(404, "Payment plan not found")
     if plan.status != PaymentPlanStatus.active:
-        raise HTTPException(400, f"Plan is '{plan.status}' â€” cannot record instalment")
+        raise HTTPException(400, f"Plan is '{plan.status}' - cannot record instalment")
     plan.instalments_paid += 1
     if plan.instalments_paid >= plan.total_instalments:
         plan.status = PaymentPlanStatus.completed
@@ -3057,7 +3057,7 @@ def mark_plan_defaulted(
     db.commit()
     return {"message": "Plan marked as defaulted"}
 
-# â”€â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Notifications â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/notifications")
 def get_notifications(
@@ -3114,7 +3114,7 @@ def broadcast_notification(
     db.commit()
     return {"message": "Broadcast notification sent"}
 
-# â”€â”€â”€ Reports: Risk Register Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€ Reports: Risk Register Export â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 @app.get("/api/reports/risk-register")
 def export_risk_register(
@@ -3148,7 +3148,7 @@ def export_risk_register(
     if format == "xlsx" and EXCEL_OK:
         risk_colors = {"HIGH": "C0392B", "MEDIUM": "E67E22", "LOW": "27AE60", "UNSCORED": "95A5A6"}
         wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Risk Register"
-        title_cell = ws.cell(row=1, column=1, value="City of Harare FMS â€” Ratepayer Risk Register")
+        title_cell = ws.cell(row=1, column=1, value="City of Harare FMS - Ratepayer Risk Register")
         title_cell.font = Font(bold=True, size=13, color="FFFFFF")
         title_cell.fill = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
         title_cell.alignment = Alignment(horizontal="center")
@@ -3163,7 +3163,7 @@ def export_risk_register(
             for ci, val in enumerate(row, 1):
                 cell = ws.cell(row=ri, column=ci, value=val)
                 if fill_bg: cell.fill = fill_bg
-                if ci == 6:  # Risk level column â€” colour by risk
+                if ci == 6:  # Risk level column - colour by risk
                     colour = risk_colors.get(str(val), "CCCCCC")
                     cell.fill = PatternFill(start_color=colour, end_color=colour, fill_type="solid")
                     cell.font = Font(bold=True, color="FFFFFF")
