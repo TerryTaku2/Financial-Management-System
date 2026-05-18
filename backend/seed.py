@@ -4,6 +4,7 @@ from database import SessionLocal, User, Ratepayer, Invoice, Payment, Expenditur
 from database import UserRole, PaymentStatus, RevenueCategory, AnomalyFlag
 from auth import hash_password
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import func
 
 def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -117,6 +118,28 @@ statuses_weighted = (
     [PaymentStatus.waived] * 1       # waivers — leakage risk
 )
 
+# ── One-time data-integrity cleanup (runs on every startup, idempotent) ────────
+_now = now()
+
+# Fix 2.6: reset overdue status on invoices whose due_date is still in the future.
+_future_overdue = db.query(Invoice).filter(
+    Invoice.status == PaymentStatus.overdue,
+    Invoice.due_date >= _now
+).all()
+for _inv in _future_overdue:
+    _inv.status = PaymentStatus.pending
+
+# Fix 2.9: ensure waived invoices carry a zero balance (they are written off).
+_waived_nonzero = db.query(Invoice).filter(
+    Invoice.status == PaymentStatus.waived,
+    Invoice.balance != 0
+).all()
+for _inv in _waived_nonzero:
+    _inv.balance = 0.0
+
+if _future_overdue or _waived_nonzero:
+    db.commit()
+
 invoice_count = db.query(Invoice).count()
 officer2 = db.query(User).filter(User.username == "r.officer2").first()
 collectors = [officer1, officer2] if officer2 else [officer1]
@@ -136,17 +159,26 @@ if invoice_count < 10:
             due_dt   = issue_dt + timedelta(days=30)
             status   = random.choice(statuses_weighted)
 
+            # Never assign overdue status to an invoice whose due_date is in the future.
+            if status == PaymentStatus.overdue and due_dt >= now():
+                status = PaymentStatus.pending
+
+            # Waived invoices are written off — balance is zero regardless of amount.
             if status == PaymentStatus.paid:
                 paid = amount
+            elif status == PaymentStatus.waived:
+                paid = 0.0
             elif status == PaymentStatus.pending:
                 paid = round(amount * random.uniform(0.1, 0.6), 2)
             else:
                 paid = 0.0
 
+            actual_balance = 0.0 if status == PaymentStatus.waived else round(amount - paid, 2)
+
             inv = Invoice(
                 invoice_number=rnd_inv(), ratepayer_id=rp.id,
                 category=cat, amount=amount, amount_paid=paid,
-                balance=round(amount - paid, 2),
+                balance=actual_balance,
                 issue_date=issue_dt, due_date=due_dt,
                 status=status, anomaly_flag=AnomalyFlag.none,
                 created_by=admin_user.id
@@ -407,27 +439,73 @@ if tgt_count < 3:
     db.commit()
 
 # ── Leakage Alerts ─────────────────────────────────────────────
+# Always refresh data-driven alerts so figures stay consistent with the live database.
+# Qualitative procedure-finding alerts are preserved once created (is_resolved may have changed).
+DATA_DRIVEN_ALERT_TYPES = {"stale_overdue", "unreconciled_cash", "officer_gap"}
+for atype in DATA_DRIVEN_ALERT_TYPES:
+    db.query(LeakageAlert).filter(LeakageAlert.alert_type == atype).delete()
+db.commit()
+
 alert_count = db.query(LeakageAlert).count()
 if alert_count < 3:
+    # ── Compute live figures from actual DB so alerts match real data ──
+    cutoff_180d = now() - timedelta(days=180)
+    cutoff_30d  = now() - timedelta(days=30)
+
+    stale_invs  = db.query(Invoice).filter(
+        Invoice.status == PaymentStatus.overdue,
+        Invoice.due_date < cutoff_180d
+    ).all()
+    stale_count   = len(stale_invs)
+    stale_balance = sum(inv.balance for inv in stale_invs)
+
+    unrecon_pmts  = db.query(Payment).filter(Payment.is_reconciled == False).all()
+    unrecon_count = len(unrecon_pmts)
+    unrecon_total = sum(p.amount for p in unrecon_pmts)
+
+    officer_gap_desc = (
+        "Revenue officer James Moyo (r.officer2) collection rate is significantly below "
+        "the team average. Z-score analysis flags this as a statistically significant gap "
+        "(threshold: >1.5σ below mean). Review assigned ward collection records."
+    )
+
+    if stale_count > 0:
+        stale_desc = (
+            f"{stale_count} invoice{'s' if stale_count != 1 else ''} overdue >180 days "
+            f"with combined balance of ${stale_balance:,.2f}. "
+            f"NCC (2023): accounts overdue >180 days have <25% recovery probability without legal action."
+        )
+    else:
+        stale_desc = (
+            "No invoices currently overdue >180 days. "
+            "NCC (2023): monitor closely — accounts crossing this threshold have <25% recovery probability."
+        )
+
+    if unrecon_count > 0:
+        unrecon_desc = (
+            f"{unrecon_count} payment{'s' if unrecon_count != 1 else ''} totalling "
+            f"${unrecon_total:,.2f} remain unreconciled. "
+            f"Cash with no audit trail is the primary leakage vector (ACFE, 2022)."
+        )
+    else:
+        unrecon_desc = (
+            "All payments are currently reconciled. "
+            "Cash audit trail is complete — no unreconciled leakage exposure detected (ACFE, 2022)."
+        )
+
     alerts = [
-        ("unreconciled_cash", "high",
-         "47 cash payments totalling $12,450 from Ward 7 collection drives remain unreconciled >30 days. "
-         "Cash with no audit trail is the primary leakage vector (ACFE, 2022).", "payments"),
+        ("unreconciled_cash", "high", unrecon_desc, "payments"),
         ("duplicate_billing", "medium",
-         "3 ratepayers in Mbare detected with duplicate invoices for the same billing period in Water category. "
-         "Manual billing process gap — accounts: COH-102441, COH-107832, COH-119004.", "invoices"),
+         "Audit procedure finding: manual billing process review identified risk of duplicate invoices "
+         "for the same billing period. Recommend automated duplicate-detection controls.", "invoices"),
         ("waiver_no_audit", "high",
-         "Unusual spike in penalty waivers — 18 waiver approvals in 7 days (vs. 2/week average). "
-         "No senior officer approval recorded in audit log. Possible authorisation bypass.", "invoices"),
+         "Audit procedure finding: penalty waiver approvals lack mandatory senior officer countersignature. "
+         "Possible authorisation bypass — no approval audit trail recorded in system log.", "invoices"),
         ("ghost_account", "medium",
-         "Ward 22 field survey (Sept 2023) identified 14 registered ratepayer accounts with no physical "
-         "property correspondence — potential ghost accounts inflating the debtor book.", "ratepayers"),
-        ("stale_overdue", "medium",
-         "112 accounts overdue >180 days with combined balance of $284,500. "
-         "NCC (2023): accounts overdue >180 days have <25% recovery probability without legal action.", "invoices"),
-        ("officer_gap", "medium",
-         "Revenue officer James Moyo (r.officer2) collection rate of 34% is significantly below "
-         "team average of 67%. Z-score analysis flags this as a statistically significant gap.", "users"),
+         "Audit procedure finding: field verification recommended for all active ratepayer accounts "
+         "to confirm physical property correspondence and eliminate ghost account risk.", "ratepayers"),
+        ("stale_overdue", "medium", stale_desc, "invoices"),
+        ("officer_gap", "medium", officer_gap_desc, "users"),
     ]
     for atype, sev, desc, table in alerts:
         la = LeakageAlert(alert_type=atype, severity=sev, description=desc,

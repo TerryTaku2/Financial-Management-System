@@ -24,16 +24,16 @@
       <div class="card">
         <div class="filter-bar">
           <select id="deptFilter" onchange="loadExp()">
-            <option value="">All Departments</option>
-            <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
-            <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+            <option value="">All Depts / Programmes</option>
+            <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
+            <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
           </select>
           <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
         </div>
         <div class="table-wrap">
           <table>
             <thead><tr>
-              <th>Reference</th><th>Department</th><th>Description</th>
+              <th>Reference</th><th>Dept / Programme</th><th>Description</th>
               <th>Amount</th><th>Budget Line</th><th>Date</th><th>Approved</th><th>Anomaly</th><th>Actions</th>
             </tr></thead>
             <tbody id="expTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
@@ -54,15 +54,16 @@
     <input type="hidden" id="f_editId">
     <div class="form-group"><label>Department</label>
       <select id="f_dept">
-        <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
-        <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+        <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
+        <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
       </select>
     </div>
     <div class="form-group"><label>Description</label><textarea id="f_desc" rows="2" placeholder="Describe the expenditure..."></textarea></div>
     <div class="grid-2">
       <div class="form-group"><label>Amount (USD)</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Budget Line</label><input id="f_bl" placeholder="e.g. BL-202"></div>
+      <div class="form-group"><label>Expenditure Date</label><input id="f_expdate" type="date"></div>
     </div>
+    <div class="form-group"><label>Budget Line</label><input id="f_bl" placeholder="e.g. BL-202"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
       <button class="btn btn-primary" id="saveBtn" onclick="saveExp()">Submit</button>
@@ -92,11 +93,12 @@ function goToAging() {
 }
 
 function openAddModal() {
-  document.getElementById('f_editId').value = '';
+  document.getElementById('f_editId').value  = '';
   document.getElementById('modalTitle').textContent = 'Record Expenditure';
   document.getElementById('saveBtn').textContent = 'Submit';
   ['f_desc','f_amount','f_bl'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f_dept').value = 'Finance';
+  document.getElementById('f_dept').value    = 'Finance';
+  document.getElementById('f_expdate').value = new Date().toISOString().slice(0, 10);
   openModal('addModal');
 }
 
@@ -108,6 +110,7 @@ function openEditModal(e) {
   document.getElementById('f_desc').value    = e.description;
   document.getElementById('f_amount').value  = e.amount;
   document.getElementById('f_bl').value      = e.budget_line;
+  document.getElementById('f_expdate').value = e.date || new Date().toISOString().slice(0, 10);
   openModal('addModal');
 }
 
@@ -158,10 +161,11 @@ async function deleteExp(id, ref) {
 async function saveExp() {
   const editId = document.getElementById('f_editId').value;
   const data = {
-    department:  document.getElementById('f_dept').value,
-    description: document.getElementById('f_desc').value,
-    amount:      parseFloat(document.getElementById('f_amount').value),
-    budget_line: document.getElementById('f_bl').value
+    department:        document.getElementById('f_dept').value,
+    description:       document.getElementById('f_desc').value,
+    amount:            parseFloat(document.getElementById('f_amount').value),
+    budget_line:       document.getElementById('f_bl').value,
+    expenditure_date:  document.getElementById('f_expdate').value || new Date().toISOString().slice(0, 10),
   };
   if (!data.description || !data.amount) { toast('Description and amount required','warning'); return; }
   try {

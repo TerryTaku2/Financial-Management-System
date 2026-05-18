@@ -132,17 +132,20 @@
 </div>
 <script src="../js/shared.js"></script>
 <script>
+requireAuth(); buildSidebar('management_report');
+
 const fmt = v => '$' + Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct = v => Number(v||0).toFixed(1) + '%';
 let catChart = null, trendChart = null;
 
 async function loadData() {
+  try {
   const [summary, trend, officers, forecast, variance] = await Promise.all([
-    api('/api/reports/management-summary'),
-    api('/api/reports/collection-rate-trend?months=12'),
-    api('/api/reports/officer-performance'),
-    api('/api/reports/cashflow-forecast?months_ahead=3'),
-    api('/api/reports/budget-variance')
+    apiFetch('/api/reports/management-summary'),
+    apiFetch('/api/reports/collection-rate-trend?months=12'),
+    apiFetch('/api/reports/officer-performance'),
+    apiFetch('/api/reports/cashflow-forecast?months_ahead=3'),
+    apiFetch('/api/reports/budget-variance')
   ]);
 
   // Set print meta
@@ -270,9 +273,10 @@ async function loadData() {
       <td style="color:${vColor};font-weight:600">${b.status}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No budget data</td></tr>';
+
+  } catch(e) { toast('Failed to load report: ' + e.message, 'error'); }
 }
 
-requireAuth(); buildSidebar('management_report');
 loadData();
 
 async function exportManagementPDF() {

@@ -43,7 +43,7 @@ echo  Press CTRL+C to stop the server.
 echo  ============================================================
 echo.
 
-start "" http://localhost:8001/static/pages/login.html
-uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+start "" http://127.0.0.1:8001
+uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 pause

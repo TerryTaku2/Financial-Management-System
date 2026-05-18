@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Enum
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, ForeignKey, Enum, text, inspect as sa_inspect
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timezone
@@ -231,5 +231,14 @@ class SystemNotification(Base):
     expires_at = Column(DateTime, nullable=True)
     related_table = Column(String, nullable=True)
     related_record_id = Column(Integer, nullable=True)
+
+class ExchangeRate(Base):
+    __tablename__ = "exchange_rates"
+    id = Column(Integer, primary_key=True, index=True)
+    currency = Column(String, unique=True, index=True)
+    rate_to_usd = Column(Float, default=1.0)
+    source = Column(String, nullable=True)
+    manual = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=utcnow)
 
 Base.metadata.create_all(bind=engine)

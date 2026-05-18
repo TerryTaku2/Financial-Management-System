@@ -151,6 +151,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-width: 0;
 }
 
 .topbar {
@@ -186,7 +187,7 @@ body {
 /* ── Stat Cards ── */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -349,6 +350,9 @@ select option { background: var(--bg3); }
 .toast-icon { font-size: 16px; margin-top: 1px; }
 .toast-msg { font-size: 13.5px; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.skel-cell { height: 14px; background: var(--bg3); border-radius: 4px; animation: pulse 1.4s ease-in-out infinite; }
+.skel-row td { padding: 10px 14px; }
 
 /* ── Filters ── */
 .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }

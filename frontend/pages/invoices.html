@@ -32,8 +32,8 @@
           </select>
           <select id="categoryFilter" onchange="loadInvoices()">
             <option value="">All Categories</option>
-            <option>rates</option><option>water</option><option>sewerage</option>
-            <option>refuse</option><option>licensing</option><option>parking</option><option>rentals</option><option>other</option>
+            <option value="rates">rates</option><option value="water">water</option><option value="sewerage">sewerage</option>
+            <option value="refuse">refuse</option><option value="licensing">licensing</option><option value="parking">parking</option><option value="rentals">rentals</option><option value="other">other</option>
           </select>
           <select id="anomalyFilter" onchange="loadInvoices()">
             <option value="">All Anomaly Levels</option>
@@ -64,7 +64,7 @@
       <span class="modal-title">Create Invoice</span>
       <button class="modal-close" onclick="closeModal('addModal')">×</button>
     </div>
-    <div class="form-group"><label>Ratepayer ID</label><input id="f_rpid" type="number" placeholder="Enter ratepayer ID"></div>
+    <div class="form-group"><label>Account Number</label><input id="f_rpacct" type="text" placeholder="e.g. COH-123456" autocomplete="off"></div>
     <div class="form-group"><label>Revenue Category</label>
       <select id="f_cat">
         <option value="rates">Rates</option><option value="water">Water</option>
@@ -78,6 +78,9 @@
       <div class="form-group"><label>Due Date</label><input id="f_due" type="date"></div>
     </div>
     <div class="form-group"><label>Notes (optional)</label><textarea id="f_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--text2);margin-bottom:4px">
+      Initial status: <strong style="color:var(--warning)">Pending</strong> — automatically set to Overdue once the due date passes.
+    </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
       <button class="btn btn-primary" onclick="createInvoice()">Create Invoice</button>
@@ -89,7 +92,7 @@
 <div class="modal-overlay" id="editModal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Edit Invoice</span>
+      <span class="modal-title" id="editModalTitle">Edit Invoice</span>
       <button class="modal-close" onclick="closeModal('editModal')">×</button>
     </div>
     <input type="hidden" id="e_id">
@@ -128,9 +131,10 @@ document.getElementById('f_due').value = d.toISOString().slice(0,10);
   if (p.anomaly) document.getElementById('anomalyFilter').value  = p.anomaly;
   if (p.category)document.getElementById('categoryFilter').value = p.category;
   if (p.ratepayer_id) {
-    // Store for filtering
     window._filterRatepayerId = parseInt(p.ratepayer_id);
-    document.querySelector('.topbar-title').textContent = 'Invoices — Ratepayer #' + p.ratepayer_id;
+    apiFetch(`/api/ratepayers/${p.ratepayer_id}`)
+      .then(rp => { document.querySelector('.topbar-title').textContent = `Invoices — ${rp.account_number} (${rp.full_name})`; })
+      .catch(() => {});
   }
 })();
 
@@ -182,11 +186,12 @@ async function loadInvoices(page = 1) {
 }
 
 function openEditModal(inv) {
-  document.getElementById('e_id').value     = inv.id;
-  document.getElementById('e_status').value = inv.status;
-  document.getElementById('e_due').value    = inv.due_date;
-  document.getElementById('e_amount').value = inv.amount;
-  document.getElementById('e_notes').value  = inv.notes || '';
+  document.getElementById('e_id').value         = inv.id;
+  document.getElementById('e_status').value     = inv.status;
+  document.getElementById('e_due').value        = inv.due_date;
+  document.getElementById('e_amount').value     = inv.amount;
+  document.getElementById('e_notes').value      = inv.notes || '';
+  document.getElementById('editModalTitle').textContent = `Edit Invoice — ${inv.invoice_number}`;
   openModal('editModal');
 }
 
@@ -217,17 +222,23 @@ async function deleteInvoice(id, num) {
 }
 
 async function createInvoice() {
-  const data = {
-    ratepayer_id: parseInt(document.getElementById('f_rpid').value),
-    category:     document.getElementById('f_cat').value,
-    amount:       parseFloat(document.getElementById('f_amount').value),
-    due_date:     document.getElementById('f_due').value,
-    notes:        document.getElementById('f_notes').value,
-  };
-  if (!data.ratepayer_id || !data.amount || !data.due_date) { toast('Please fill all required fields', 'warning'); return; }
+  const acct   = document.getElementById('f_rpacct').value.trim();
+  const amount = parseFloat(document.getElementById('f_amount').value);
+  const due    = document.getElementById('f_due').value;
+  if (!acct || !amount || !due) { toast('Please fill all required fields', 'warning'); return; }
   try {
+    const lookup = await apiFetch(`/api/ratepayers?search=${encodeURIComponent(acct)}&limit=1`);
+    const rp = (lookup.items || lookup)[0];
+    if (!rp) { toast(`No ratepayer found for account "${acct}"`, 'warning'); return; }
+    const data = {
+      ratepayer_id: rp.id,
+      category:     document.getElementById('f_cat').value,
+      amount,
+      due_date:     due,
+      notes:        document.getElementById('f_notes').value,
+    };
     const res = await apiPost('/api/invoices', data);
-    toast(`Invoice ${res.invoice_number} created`, 'success');
+    toast(`Invoice ${res.invoice_number} created for ${rp.full_name}`, 'success');
     closeModal('addModal');
     loadInvoices();
   } catch(e) { toast(e.message, 'error'); }

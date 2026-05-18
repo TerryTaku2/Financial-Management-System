@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 import random, string
@@ -31,12 +31,55 @@ except ImportError:
 from database import (get_db, User, Ratepayer, Invoice, Payment, Expenditure,
                       Budget, AuditLog, LeakageAlert, RevenueTarget,
                       UserRole, PaymentStatus, RevenueCategory, AnomalyFlag,
-                      LoginAttempt, PaymentPlan, PaymentPlanStatus, SystemNotification)
+                      LoginAttempt, PaymentPlan, PaymentPlanStatus, SystemNotification,
+                      ExchangeRate)
 from auth import (verify_password, hash_password, create_access_token,
                   get_current_user, require_roles)
 
 def now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+def _provider_symbol_for_api(code: str) -> str:
+    # Map internal currency codes to external provider symbols
+    c = normalize_currency_code(code)
+    if c in ("ZIG", "ZWG"):
+        return "ZWL"
+    return c
+
+def fetch_rate_from_exchangerate_host(currency: str) -> Optional[dict]:
+    import requests
+    symbol = _provider_symbol_for_api(currency)
+    if symbol == "USD":
+        return {"rate": 1.0, "source": "local"}
+    url = f"https://api.exchangerate.host/latest?base={symbol}&symbols=USD"
+    try:
+        r = requests.get(url, timeout=6)
+        if r.status_code == 200:
+            data = r.json()
+            rate = data.get("rates", {}).get("USD")
+            if rate:
+                # rate is USD per 1 unit of currency
+                return {"rate": float(rate), "source": url}
+    except Exception:
+        return None
+    return None
+
+def update_exchange_rate_in_db(db: Session, currency: str) -> Optional[ExchangeRate]:
+    code = normalize_currency_code(currency)
+    fetched = fetch_rate_from_exchangerate_host(code)
+    if not fetched:
+        return None
+    er = db.query(ExchangeRate).filter(ExchangeRate.currency == code).first()
+    if not er:
+        er = ExchangeRate(currency=code, rate_to_usd=fetched["rate"], source=fetched["source"], manual=False, updated_at=now())
+        db.add(er)
+    else:
+        er.rate_to_usd = fetched["rate"]
+        er.source = fetched["source"]
+        er.manual = False
+        er.updated_at = now()
+    db.commit()
+    return er
 
 # â"€â"€â"€ Security Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 MAX_FAILED_LOGINS = 5
@@ -61,7 +104,58 @@ def compute_invoice_fingerprint(ratepayer_id: int, category: str, amount: float,
     raw = f"{ratepayer_id}|{category}|{round(amount, 2)}|{str(due_date)[:10]}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-# â"€â"€â"€ AI: Ratepayer Risk Score â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+CURRENCY_CONVERSION_RATES = {
+    "USD": 1.0,
+    "ZIG": 0.001,
+    "ZWG": 0.001,
+}
+
+def normalize_currency_code(code: Optional[str]) -> str:
+    if not code:
+        return "USD"
+    currency = str(code).strip().upper()
+    if currency == "ZWG":
+        return "ZIG"
+    return currency
+
+def amount_to_usd(amount: float, currency: Optional[str], db: Session = None) -> float:
+    # Prefer DB-stored rate when available; fall back to static mapping
+    code = normalize_currency_code(currency)
+    rate = CURRENCY_CONVERSION_RATES.get(code, 1.0)
+    try:
+        if db is not None:
+            er = db.query(ExchangeRate).filter(ExchangeRate.currency == code).first()
+            if er and er.rate_to_usd:
+                rate = er.rate_to_usd
+    except Exception:
+        pass
+    return round((amount or 0.0) * rate, 2)
+
+
+def usd_payment_sum(query) -> float:
+    # Groups payments by currency and converts each group to USD using DB rates where available.
+    rows = query.with_entities(Payment.currency, func.sum(Payment.amount)).group_by(Payment.currency).all()
+    total = 0.0
+    session = None
+    try:
+        session = query.session
+    except Exception:
+        session = None
+    codes = [normalize_currency_code(r[0]) for r in rows]
+    rate_map = {}
+    if session is not None and codes:
+        try:
+            ers = session.query(ExchangeRate).filter(ExchangeRate.currency.in_(codes)).all()
+            rate_map = {er.currency: er.rate_to_usd for er in ers}
+        except Exception:
+            rate_map = {}
+    for currency, amt in rows:
+        code = normalize_currency_code(currency)
+        rate = rate_map.get(code, CURRENCY_CONVERSION_RATES.get(code, 1.0))
+        total += (amt or 0.0) * rate
+    return round(total, 2)
+
+# â"€â"€â"€ AI: Ratepayer Risk Score â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def compute_ratepayer_risk(rp, db) -> dict:
     """
     Composite 0-100 risk score per ratepayer using a weighted additive model.
@@ -88,6 +182,7 @@ def compute_ratepayer_risk(rp, db) -> dict:
         Invoice.ratepayer_id == rp.id, Invoice.anomaly_flag == AnomalyFlag.high).scalar() or 0
     total_inv   = db.query(func.count(Invoice.id)).filter(Invoice.ratepayer_id == rp.id).scalar() or 1
     score += min(high_anom / total_inv, 1.0) * 20
+    # Ensure rate table exists and try to keep it updated lazily
     # Factor 4: Defaulted payment plans (10 pts)
     defaulted = db.query(func.count(PaymentPlan.id)).filter(
         PaymentPlan.ratepayer_id == rp.id, PaymentPlan.status == PaymentPlanStatus.defaulted).scalar() or 0
@@ -107,8 +202,8 @@ def predict_next_month_revenue(db) -> dict:
         ref = now() - timedelta(days=30 * i)
         ms  = ref.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         me  = ms.replace(month=ms.month % 12 + 1, day=1) if ms.month < 12 else ms.replace(year=ms.year + 1, month=1, day=1)
-        collected = db.query(func.sum(Payment.amount)).filter(
-            Payment.payment_date >= ms, Payment.payment_date < me).scalar() or 0
+        collected = usd_payment_sum(db.query(Payment).filter(
+            Payment.payment_date >= ms, Payment.payment_date < me))
         monthly_data.append((ms.strftime("%b %Y"), float(collected)))
     values = [v for _, v in monthly_data]
     n = len(values)
@@ -130,6 +225,21 @@ def predict_next_month_revenue(db) -> dict:
 
 def refresh_overdue_invoices(db: Session):
     cutoff = now()
+
+    # Correct invoices wrongly marked overdue whose due_date is still in the future.
+    # This can occur when seed data assigns overdue status without checking the due_date.
+    future_overdue = db.query(Invoice).filter(
+        Invoice.status == PaymentStatus.overdue,
+        Invoice.due_date >= cutoff,
+        Invoice.balance > 0
+    ).all()
+    for inv in future_overdue:
+        inv.status = PaymentStatus.pending
+        db.add(AuditLog(user_id=None, action="UPDATE", table_name="invoices",
+                        record_id=inv.id,
+                        description=f"Invoice {inv.invoice_number} reset from overdue to pending (due date {str(inv.due_date)[:10]} is in the future)"))
+
+    # Mark genuinely overdue invoices.
     overdue_list = db.query(Invoice).filter(
         Invoice.status.in_([PaymentStatus.pending, PaymentStatus.disputed]),
         Invoice.due_date < cutoff,
@@ -140,7 +250,8 @@ def refresh_overdue_invoices(db: Session):
         db.add(AuditLog(user_id=None, action="UPDATE", table_name="invoices",
                         record_id=inv.id,
                         description=f"Invoice {inv.invoice_number} marked overdue"))
-    if overdue_list:
+
+    if future_overdue or overdue_list:
         db.commit()
     return len(overdue_list)
 
@@ -404,6 +515,10 @@ class PaymentCreate(BaseModel):
     currency: str = "USD"
     notes: Optional[str] = None
 
+    @validator("currency", pre=True, always=True)
+    def normalize_currency(cls, v):
+        return normalize_currency_code(v)
+
 class ExpenditureCreate(BaseModel):
     department: str
     description: str
@@ -564,24 +679,25 @@ def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
 def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     refresh_overdue_invoices(db)
     total_billed     = db.query(func.sum(Invoice.amount)).scalar() or 0
-    total_collected  = db.query(func.sum(Payment.amount)).scalar() or 0
+    total_collected  = usd_payment_sum(db.query(Payment))
     total_outstanding = db.query(func.sum(Invoice.balance)).scalar() or 0
     overdue_count    = db.query(Invoice).filter(Invoice.status == PaymentStatus.overdue).count()
     high_alerts      = db.query(LeakageAlert).filter(LeakageAlert.is_resolved == False).count()
     anomaly_invoices = db.query(Invoice).filter(Invoice.anomaly_flag != AnomalyFlag.none).count()
+    anomaly_payments = db.query(Payment).filter(Payment.anomaly_flag != AnomalyFlag.none).count()
     collection_rate  = round((total_collected / total_billed * 100), 1) if total_billed > 0 else 0
     # Leakage Risk Index: weighted sum of risk exposures.
     # Weights derived from ACFE (2022) Revenue Assurance Framework:
     #   40% of unreconciled payments â†' confirmed leakage (cash received, not tracked)
     #   25% of overdue balance â†' at-risk revenue (NCC 2023: 25% recovery rate for overdue >90d)
     overdue_bal   = db.query(func.sum(Invoice.balance)).filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
-    unrecon_amt   = db.query(func.sum(Payment.amount)).filter(Payment.is_reconciled == False).scalar() or 0
+    unrecon_amt   = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
     leakage_estimate = round(unrecon_amt * 0.40 + overdue_bal * 0.25, 2)
     return {
         "total_billed": round(total_billed, 2), "total_collected": round(total_collected, 2),
         "total_outstanding": round(total_outstanding, 2), "collection_rate": collection_rate,
         "overdue_count": overdue_count, "active_alerts": high_alerts,
-        "anomaly_count": anomaly_invoices, "leakage_estimate": leakage_estimate,
+        "anomaly_count": anomaly_invoices + anomaly_payments, "leakage_estimate": leakage_estimate,
         "ratepayers_count": db.query(Ratepayer).count(),
         "invoices_count": db.query(Invoice).count(),
         "payments_count": db.query(Payment).count(),
@@ -601,7 +717,7 @@ def monthly_trend(db: Session = Depends(get_db), current_user: User = Depends(ge
         start = now().replace(day=1) - timedelta(days=30*i)
         end   = start + timedelta(days=30)
         billed    = db.query(func.sum(Invoice.amount)).filter(Invoice.issue_date >= start, Invoice.issue_date < end).scalar() or 0
-        collected = db.query(func.sum(Payment.amount)).filter(Payment.payment_date >= start, Payment.payment_date < end).scalar() or 0
+        collected = usd_payment_sum(db.query(Payment).filter(Payment.payment_date >= start, Payment.payment_date < end))
         months.append({"month": start.strftime("%b %Y"), "billed": round(billed, 2), "collected": round(collected, 2)})
     return months
 
@@ -658,7 +774,7 @@ def get_ratepayer(rp_id: int, db: Session = Depends(get_db),
     invoices = db.query(Invoice).filter(Invoice.ratepayer_id == rp_id).all()
     payments = db.query(Payment).filter(Payment.ratepayer_id == rp_id).all()
     total_billed = sum(i.amount for i in invoices)
-    total_paid   = sum(p.amount for p in payments)
+    total_paid   = sum(amount_to_usd(p.amount, p.currency) for p in payments)
     return {
         "id": rp.id, "account_number": rp.account_number, "full_name": rp.full_name,
         "address": rp.address, "ward": rp.ward, "zone": rp.zone,
@@ -668,6 +784,53 @@ def get_ratepayer(rp_id: int, db: Session = Depends(get_db),
         "balance": round(total_billed - total_paid, 2),
         "invoice_count": len(invoices), "payment_count": len(payments)
     }
+
+
+class ExchangeRateSet(BaseModel):
+    currency: str
+    rate_to_usd: float
+    source: Optional[str] = None
+    manual: Optional[bool] = True
+
+
+@app.get("/api/exchange-rate")
+def get_exchange_rate(currency: str = "ZIG", db: Session = Depends(get_db)):
+    code = normalize_currency_code(currency)
+    er = db.query(ExchangeRate).filter(ExchangeRate.currency == code).first()
+    if er:
+        return {"currency": er.currency, "rate_to_usd": er.rate_to_usd, "source": er.source, "manual": er.manual, "updated_at": str(er.updated_at)}
+    # attempt fetch if not present
+    fetched = update_exchange_rate_in_db(db, code)
+    if fetched:
+        return {"currency": fetched.currency, "rate_to_usd": fetched.rate_to_usd, "source": fetched.source, "manual": fetched.manual, "updated_at": str(fetched.updated_at)}
+    raise HTTPException(404, f"No exchange rate available for {code}")
+
+
+@app.post("/api/exchange-rate/fetch")
+def fetch_exchange_rate(currency: str = "ZIG", db: Session = Depends(get_db),
+                        current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant))):
+    code = normalize_currency_code(currency)
+    er = update_exchange_rate_in_db(db, code)
+    if not er:
+        raise HTTPException(500, "Failed to fetch exchange rate from provider")
+    return {"currency": er.currency, "rate_to_usd": er.rate_to_usd, "source": er.source, "updated_at": str(er.updated_at)}
+
+
+@app.post("/api/exchange-rate/set")
+def set_exchange_rate(data: ExchangeRateSet, db: Session = Depends(get_db),
+                      current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant))):
+    code = normalize_currency_code(data.currency)
+    er = db.query(ExchangeRate).filter(ExchangeRate.currency == code).first()
+    if not er:
+        er = ExchangeRate(currency=code, rate_to_usd=data.rate_to_usd, source=data.source or "manual", manual=bool(data.manual), updated_at=now())
+        db.add(er)
+    else:
+        er.rate_to_usd = data.rate_to_usd
+        er.source = data.source or er.source
+        er.manual = bool(data.manual)
+        er.updated_at = now()
+    db.commit()
+    return {"currency": er.currency, "rate_to_usd": er.rate_to_usd, "source": er.source, "manual": er.manual, "updated_at": str(er.updated_at)}
 
 @app.put("/api/ratepayers/{rp_id}")
 def update_ratepayer(rp_id: int, data: RatepayerUpdate, db: Session = Depends(get_db),
@@ -1039,23 +1202,45 @@ def delete_budget(bud_id: int,
 
 @app.get("/api/leakage/summary")
 def leakage_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    high  = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.high).count()
-    medium = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.medium).count()
-    low_f  = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.low).count()
+    # Anomaly counts include both invoice-level and payment-level flags
+    inv_high   = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.high).count()
+    inv_medium = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.medium).count()
+    inv_low    = db.query(Invoice).filter(Invoice.anomaly_flag == AnomalyFlag.low).count()
+    pmt_high   = db.query(Payment).filter(Payment.anomaly_flag == AnomalyFlag.high).count()
+    pmt_medium = db.query(Payment).filter(Payment.anomaly_flag == AnomalyFlag.medium).count()
+    pmt_low    = db.query(Payment).filter(Payment.anomaly_flag == AnomalyFlag.low).count()
+
     unreconciled     = db.query(Payment).filter(Payment.is_reconciled == False).count()
-    unreconciled_amt = db.query(func.sum(Payment.amount)).filter(Payment.is_reconciled == False).scalar() or 0
-    overdue_amt      = db.query(func.sum(Invoice.balance)).filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
+    unrecon_cash     = usd_payment_sum(db.query(Payment).filter(
+        Payment.is_reconciled == False, Payment.payment_method == "cash"))
+    unrecon_other    = usd_payment_sum(db.query(Payment).filter(
+        Payment.is_reconciled == False, Payment.payment_method != "cash"))
+    overdue_amt      = db.query(func.sum(Invoice.balance)).filter(
+        Invoice.status == PaymentStatus.overdue).scalar() or 0
+    waived_total     = db.query(func.sum(Invoice.amount)).filter(
+        Invoice.status == PaymentStatus.waived).scalar() or 0
+    anomaly_inv_amt  = db.query(func.sum(Invoice.amount)).filter(
+        Invoice.anomaly_flag != AnomalyFlag.none).scalar() or 0
     alerts = db.query(LeakageAlert).filter(LeakageAlert.is_resolved == False).all()
+
+    # 5-component ACFE (2022) weighted leakage model — same formula as /api/leakage/quantification
+    estimated_leakage = round(
+        unrecon_cash  * 0.40 +
+        unrecon_other * 0.20 +
+        overdue_amt   * 0.25 +
+        waived_total  * 0.15 +
+        anomaly_inv_amt * 0.10,
+        2
+    )
     return {
-        "high_anomalies": high, "medium_anomalies": medium, "low_anomalies": low_f,
+        "high_anomalies":       inv_high   + pmt_high,
+        "medium_anomalies":     inv_medium + pmt_medium,
+        "low_anomalies":        inv_low    + pmt_low,
         "unreconciled_payments": unreconciled,
-        "unreconciled_amount": round(unreconciled_amt, 2),
-        "overdue_balance": round(overdue_amt, 2),
-        "active_alerts": len(alerts),
-        # Leakage Risk Index - ACFE (2022) weighted model:
-        # 40% of unreconciled payments (cash received, no audit trail) +
-        # 25% of overdue balance (NCC 2023: <25% recovery probability beyond 90 days)
-        "estimated_leakage": round(unreconciled_amt * 0.40 + overdue_amt * 0.25, 2)
+        "unreconciled_amount":  round(unrecon_cash + unrecon_other, 2),
+        "overdue_balance":      round(overdue_amt, 2),
+        "active_alerts":        len(alerts),
+        "estimated_leakage":    estimated_leakage,
     }
 
 @app.get("/api/leakage/alerts")
@@ -1170,8 +1355,7 @@ def scan_leakage_alerts(background_tasks: BackgroundTasks,
     officers = db.query(User).filter(User.role == UserRole.revenue_officer, User.is_active == True).all()
     officer_rates = []
     for officer in officers:
-        total_collected = db.query(func.sum(Payment.amount))\
-            .filter(Payment.collected_by == officer.id).scalar() or 0
+        total_collected = usd_payment_sum(db.query(Payment).filter(Payment.collected_by == officer.id))
         inv_count = db.query(func.count(Invoice.id))\
             .filter(Invoice.created_by == officer.id).scalar() or 0
         total_billed = db.query(func.sum(Invoice.amount))\
@@ -1298,10 +1482,16 @@ def leakage_quantification(
     total_billed = db.query(func.sum(Invoice.amount)).scalar() or 0
 
     # ── By revenue category ──────────────────────────────────────────────
+    # Use Payment.amount joined to Invoice to correctly count actual cash received per
+    # category. Invoice.amount_paid misses orphaned (unlinked) cash payments.
     by_category = []
     for (cat,) in db.query(Invoice.category).distinct().all():
         billed       = db.query(func.sum(Invoice.amount)).filter(Invoice.category == cat).scalar() or 0
-        collected    = db.query(func.sum(Invoice.amount_paid)).filter(Invoice.category == cat).scalar() or 0
+        collected    = usd_payment_sum(
+            db.query(Payment)
+              .join(Invoice, Payment.invoice_id == Invoice.id)
+              .filter(Invoice.category == cat)
+        )
         overdue_bal  = db.query(func.sum(Invoice.balance)).filter(
             Invoice.category == cat, Invoice.status == PaymentStatus.overdue).scalar() or 0
         anomaly_amt  = db.query(func.sum(Invoice.amount)).filter(
@@ -1319,11 +1509,27 @@ def leakage_quantification(
             "collection_rate":   round(collected / billed * 100, 1) if billed > 0 else 0,
         })
 
+    # Orphaned payments (no invoice link) are real cash received but uncategorised.
+    # Include them as a separate row so by_category totals reconcile to dashboard total.
+    orphaned = usd_payment_sum(db.query(Payment).filter(Payment.invoice_id == None))
+    if orphaned > 0:
+        by_category.append({
+            "category":          "unlinked",
+            "billed":            0,
+            "collected":         round(orphaned, 2),
+            "outstanding":       round(-orphaned, 2),
+            "overdue_balance":   0,
+            "anomaly_amount":    0,
+            "estimated_leakage": 0,
+            "leakage_pct":       0,
+            "collection_rate":   0,
+        })
+
     # ── By leakage type ──────────────────────────────────────────────────
-    unrecon_cash  = db.query(func.sum(Payment.amount)).filter(
-        Payment.is_reconciled == False, Payment.payment_method == "cash").scalar() or 0
-    unrecon_other = db.query(func.sum(Payment.amount)).filter(
-        Payment.is_reconciled == False, Payment.payment_method != "cash").scalar() or 0
+    unrecon_cash  = usd_payment_sum(db.query(Payment).filter(
+        Payment.is_reconciled == False, Payment.payment_method == "cash"))
+    unrecon_other = usd_payment_sum(db.query(Payment).filter(
+        Payment.is_reconciled == False, Payment.payment_method != "cash"))
     overdue_total = db.query(func.sum(Invoice.balance)).filter(
         Invoice.status == PaymentStatus.overdue).scalar() or 0
     waived_total  = db.query(func.sum(Invoice.amount)).filter(
@@ -1386,9 +1592,9 @@ def leakage_cause_analysis(
         else:
             me = ms.replace(month=ms.month + 1, day=1)
 
-        unrecon  = db.query(func.sum(Payment.amount)).filter(
+        unrecon  = usd_payment_sum(db.query(Payment).filter(
             Payment.payment_date >= ms, Payment.payment_date < me,
-            Payment.is_reconciled == False).scalar() or 0
+            Payment.is_reconciled == False))
         overdue  = db.query(func.sum(Invoice.balance)).filter(
             Invoice.issue_date >= ms, Invoice.issue_date < me,
             Invoice.status == PaymentStatus.overdue).scalar() or 0
@@ -1397,8 +1603,8 @@ def leakage_cause_analysis(
             Invoice.anomaly_flag != AnomalyFlag.none).scalar() or 0
         billed   = db.query(func.sum(Invoice.amount)).filter(
             Invoice.issue_date >= ms, Invoice.issue_date < me).scalar() or 0
-        collected = db.query(func.sum(Payment.amount)).filter(
-            Payment.payment_date >= ms, Payment.payment_date < me).scalar() or 0
+        collected = usd_payment_sum(db.query(Payment).filter(
+            Payment.payment_date >= ms, Payment.payment_date < me))
 
         unreconciled_leakage = round(unrecon  * 0.40, 2)
         overdue_leakage      = round(overdue  * 0.25, 2)
@@ -1468,6 +1674,7 @@ def leakage_cause_analysis(
 def get_audit_logs(skip: int = 0, limit: int = 50,
                    date_from: Optional[str] = None, date_to: Optional[str] = None,
                    action: Optional[str] = None, table_name: Optional[str] = None,
+                   user_actions_only: bool = False,
                    db: Session = Depends(get_db),
                    current_user: User = Depends(require_roles(UserRole.admin, UserRole.auditor))):
     q = db.query(AuditLog).order_by(desc(AuditLog.timestamp))
@@ -1475,6 +1682,7 @@ def get_audit_logs(skip: int = 0, limit: int = 50,
     if date_to:   q = q.filter(AuditLog.timestamp <= datetime.fromisoformat(date_to + "T23:59:59"))
     if action:     q = q.filter(AuditLog.action == action.upper())
     if table_name: q = q.filter(AuditLog.table_name == table_name)
+    if user_actions_only: q = q.filter(AuditLog.user_id != None)
     total = q.count()
     items = q.offset(skip).limit(limit).all()
     result = []
@@ -2354,7 +2562,103 @@ def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(500, f"Database error: {str(e)}")
 
-# â"€â"€â"€ Bulk Reconciliation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+# --- Reconciliation Register -------------------------------------------------
+
+@app.get("/api/reconciliation")
+def list_reconciliation(
+    status: Optional[str] = Query(None, regex="^(reconciled|unreconciled)?$"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Dedicated reconciliation register.
+    Returns paginated payments with full reconciliation metadata PLUS
+    a summary block (counts, amounts, rate, leakage exposure) in a single
+    request — eliminates the two round-trips the old page used.
+    """
+    # Summary stats (always over all payments, ignoring filter)
+    total_count      = db.query(func.count(Payment.id)).scalar() or 0
+    recon_count      = db.query(func.count(Payment.id)).filter(Payment.is_reconciled == True).scalar() or 0
+    unrecon_count    = total_count - recon_count
+    recon_amt        = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == True))
+    unrecon_amt      = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
+    recon_rate       = round(recon_count / total_count * 100, 1) if total_count > 0 else 0.0
+    unrecon_cash_amt = usd_payment_sum(db.query(Payment).filter(
+        Payment.is_reconciled == False, Payment.payment_method == "cash"))
+
+    # Filtered query for the page
+    q = db.query(Payment)
+    if status == "reconciled":
+        q = q.filter(Payment.is_reconciled == True)
+    elif status == "unreconciled":
+        q = q.filter(Payment.is_reconciled == False)
+    if search:
+        if len(search) > 100:
+            raise HTTPException(400, "Search too long")
+        rp_ids = [r.id for r in db.query(Ratepayer).filter(
+            Ratepayer.full_name.ilike(f"%{search}%") |
+            Ratepayer.account_number.ilike(f"%{search}%")
+        ).all()]
+        q = q.filter(
+            Payment.receipt_number.ilike(f"%{search}%") |
+            Payment.ratepayer_id.in_(rp_ids)
+        )
+
+    page_total = q.count()
+    payments   = q.order_by(desc(Payment.payment_date)).offset(skip).limit(limit).all()
+
+    # Fetch related names in batch
+    rp_ids_page  = list({p.ratepayer_id for p in payments})
+    user_ids_page = list({p.collected_by for p in payments if p.collected_by} |
+                         {p.reconciled_by for p in payments if p.reconciled_by})
+    rp_map   = {r.id: r for r in db.query(Ratepayer).filter(Ratepayer.id.in_(rp_ids_page)).all()}
+    user_map = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids_page)).all()}
+
+    items = []
+    for p in payments:
+        rp         = rp_map.get(p.ratepayer_id)
+        collector  = user_map.get(p.collected_by)
+        reconciler = user_map.get(p.reconciled_by)
+        items.append({
+            "id":              p.id,
+            "receipt_number":  p.receipt_number,
+            "ratepayer_id":    p.ratepayer_id,
+            "ratepayer_name":  rp.full_name      if rp         else "Unknown",
+            "account_number":  rp.account_number if rp         else "",
+            "amount":          round(p.amount, 2),
+            "payment_method":  p.payment_method,
+            "currency":        p.currency,
+            "payment_date":    str(p.payment_date)[:10],
+            "is_reconciled":   p.is_reconciled,
+            "reconciled_by":   reconciler.full_name if reconciler else None,
+            "reconciled_at":   str(p.reconciled_at)[:16] if p.reconciled_at else None,
+            "collected_by":    collector.full_name  if collector  else None,
+            "anomaly_flag":    p.anomaly_flag,
+            "anomaly_reason":  p.anomaly_reason,
+            "invoice_id":      p.invoice_id,
+            "notes":           p.notes,
+        })
+
+    return {
+        "summary": {
+            "total_payments":      total_count,
+            "reconciled_count":    recon_count,
+            "unreconciled_count":  unrecon_count,
+            "reconciled_amount":   round(recon_amt, 2),
+            "unreconciled_amount": round(unrecon_amt, 2),
+            "reconciliation_rate": recon_rate,
+            "leakage_exposure":    round(unrecon_cash_amt * 0.40, 2),
+        },
+        "total":  page_total,
+        "skip":   skip,
+        "limit":  limit,
+        "items":  items,
+    }
+
+# --- Bulk Reconciliation -----------------------------------------------------
 
 @app.post("/api/payments/reconcile-all")
 def bulk_reconcile(
@@ -2397,9 +2701,8 @@ def collection_rate_trend(
         billed = db.query(func.sum(Invoice.amount))\
             .filter(Invoice.issue_date >= month_start, Invoice.issue_date < month_end)\
             .scalar() or 0
-        collected = db.query(func.sum(Payment.amount))\
-            .filter(Payment.payment_date >= month_start, Payment.payment_date < month_end)\
-            .scalar() or 0
+        collected = usd_payment_sum(db.query(Payment)
+            .filter(Payment.payment_date >= month_start, Payment.payment_date < month_end))
         overdue = db.query(func.sum(Invoice.balance))\
             .filter(
                 Invoice.issue_date >= month_start, Invoice.issue_date < month_end,
@@ -2439,7 +2742,7 @@ def ratepayer_statement(
                  .order_by(Payment.payment_date).all()
 
     total_billed    = sum(i.amount for i in invoices)
-    total_paid      = sum(p.amount for p in payments)
+    total_paid      = sum(amount_to_usd(p.amount, p.currency) for p in payments)
     total_outstanding = sum(i.balance for i in invoices)
     overdue_balance = sum(i.balance for i in invoices if i.status == PaymentStatus.overdue)
 
@@ -2508,8 +2811,7 @@ def officer_performance_report(
 
     rows = []
     for officer in officers:
-        total_collected = db.query(func.sum(Payment.amount))\
-            .filter(Payment.collected_by == officer.id).scalar() or 0
+        total_collected = usd_payment_sum(db.query(Payment).filter(Payment.collected_by == officer.id))
         total_billed = db.query(func.sum(Invoice.amount))\
             .filter(Invoice.created_by == officer.id).scalar() or 0
         invoice_count = db.query(func.count(Invoice.id))\
@@ -2577,8 +2879,7 @@ def cashflow_forecast(
     cutoff = now() - timedelta(days=90)
     hist_billed = db.query(func.sum(Invoice.amount))\
         .filter(Invoice.issue_date >= cutoff).scalar() or 0
-    hist_collected = db.query(func.sum(Payment.amount))\
-        .filter(Payment.payment_date >= cutoff).scalar() or 0
+    hist_collected = usd_payment_sum(db.query(Payment).filter(Payment.payment_date >= cutoff))
     hist_rate = hist_collected / hist_billed if hist_billed > 0 else 0.35
 
     forecast = []
@@ -2743,12 +3044,11 @@ def management_summary_report(
     refresh_overdue_invoices(db)
 
     total_billed     = db.query(func.sum(Invoice.amount)).scalar() or 0
-    total_collected  = db.query(func.sum(Payment.amount)).scalar() or 0
+    total_collected  = usd_payment_sum(db.query(Payment))
     total_outstanding = db.query(func.sum(Invoice.balance)).scalar() or 0
     overdue_balance  = db.query(func.sum(Invoice.balance))\
         .filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
-    unrecon_amt      = db.query(func.sum(Payment.amount))\
-        .filter(Payment.is_reconciled == False).scalar() or 0
+    unrecon_amt      = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
     collection_rate  = round(total_collected / total_billed * 100, 1) if total_billed > 0 else 0
     leakage_estimate = round(unrecon_amt * 0.40 + overdue_balance * 0.25, 2)
 

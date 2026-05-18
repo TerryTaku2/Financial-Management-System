@@ -28,9 +28,9 @@
           <input type="text" id="searchInput" placeholder="🔍  Search by name or account..." style="min-width:260px" oninput="debounceLoad()">
           <select id="zoneFilter" onchange="loadRatepayers()">
             <option value="">All Zones</option>
-            <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
-            <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
-            <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+            <option value="Avondale">Avondale</option><option value="Borrowdale">Borrowdale</option><option value="Chitungwiza">Chitungwiza</option>
+            <option value="Glen Norah">Glen Norah</option><option value="Highfield">Highfield</option><option value="Kuwadzana">Kuwadzana</option>
+            <option value="Mabvuku">Mabvuku</option><option value="Mbare">Mbare</option><option value="Mount Pleasant">Mount Pleasant</option><option value="Southerton">Southerton</option>
           </select>
           <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
         </div>
@@ -61,15 +61,15 @@
     <div class="grid-2">
       <div class="form-group"><label>Ward</label>
         <select id="f_ward">
-          <option>Ward 1</option><option>Ward 2</option><option>Ward 3</option><option>Ward 5</option>
-          <option>Ward 7</option><option>Ward 10</option><option>Ward 17</option><option>Ward 22</option>
+          <option value="Ward 1">Ward 1</option><option value="Ward 2">Ward 2</option><option value="Ward 3">Ward 3</option><option value="Ward 5">Ward 5</option>
+          <option value="Ward 7">Ward 7</option><option value="Ward 10">Ward 10</option><option value="Ward 17">Ward 17</option><option value="Ward 22">Ward 22</option>
         </select>
       </div>
       <div class="form-group"><label>Zone</label>
         <select id="f_zone">
-          <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
-          <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
-          <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+          <option value="Avondale">Avondale</option><option value="Borrowdale">Borrowdale</option><option value="Chitungwiza">Chitungwiza</option>
+          <option value="Glen Norah">Glen Norah</option><option value="Highfield">Highfield</option><option value="Kuwadzana">Kuwadzana</option>
+          <option value="Mabvuku">Mabvuku</option><option value="Mbare">Mbare</option><option value="Mount Pleasant">Mount Pleasant</option><option value="Southerton">Southerton</option>
         </select>
       </div>
     </div>
@@ -125,7 +125,8 @@ async function loadRatepayers(page = 1) {
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (zone)   url += `&zone=${encodeURIComponent(zone)}`;
     const data = await apiFetch(url);
-    document.getElementById('countBadge').textContent = `${data.total} ratepayers`;
+    const from = skip + 1, to = Math.min(skip + data.items.length, data.total);
+    document.getElementById('countBadge').textContent = data.total > 0 ? `Showing ${from}–${to} of ${data.total} ratepayers` : '0 ratepayers';
     const tbody = document.getElementById('rpTable');
     if (data.items.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">👤</div><p>No ratepayers found</p></div></td></tr>`;

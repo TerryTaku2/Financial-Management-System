@@ -146,7 +146,7 @@ function buildSidebar(activePage) {
     { label: 'Leakage Monitor',  icon: '▪', page: 'leakage',      href: 'leakage.html',      roles: [] },
     { label: 'Reconciliation',    icon: '▪', page: 'reconciliation', href: 'reconciliation.html', roles: [] },
     { label: 'Audit Trail',      icon: '▪', page: 'audit',        href: 'audit.html',        roles: ['admin','auditor'] },
-    { label: 'Mgmt Report',      icon: '▪', page: 'management_report', href: 'management_report.html', roles: ['admin','auditor','accountant','budget_officer'] },
+    { label: 'Management Report', icon: '▪', page: 'management_report', href: 'management_report.html', roles: ['admin','auditor','accountant','budget_officer'] },
     { label: 'Reports',          icon: '▪', page: 'reports',      href: 'reports.html',      roles: ['admin','auditor','accountant','budget_officer'] },
     { label: 'Aging Analysis',   icon: '▪', page: 'aging',        href: 'aging.html',        roles: [] },
     { label: 'Chart Generator',  icon: '▪', page: 'charts',       href: 'charts.html',       roles: [] },

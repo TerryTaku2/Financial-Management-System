@@ -25,6 +25,15 @@
       </div>
     </div>
     <div class="page-content">
+      <!-- Data source notice -->
+      <div style="background:rgba(59,125,216,0.08);border:1px solid rgba(59,125,216,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text2);line-height:1.6">
+        <strong style="color:var(--primary-light)">Data source — COH 2024/2025 Consolidated Budget Report.</strong>
+        Allocated and Spent figures are drawn from the City of Harare's official budget document
+        (converted from ZiG at 1 USD = 1,000 ZiG, RBZ 2024 mid-year rate). Utilisation above 100%
+        reflects mid-year supplementary budgets and grant funding approved by Council — not system
+        data-entry errors. The Expenditure module records individual transaction receipts and is a
+        subset of the total departmental spend shown here.
+      </div>
       <div class="grid-2 mb-4">
         <div class="card">
           <div class="card-header"><span class="card-title">Budget Utilisation by Department</span></div>
@@ -62,13 +71,13 @@
     </div>
     <div class="form-group"><label>Department</label>
       <select id="f_dept">
-        <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
-        <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+        <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
+        <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
       </select>
     </div>
     <div class="grid-2">
       <div class="form-group"><label>Allocated Amount (USD)</label><input id="f_alloc" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Spent Amount (USD)</label><input id="f_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
+      <div class="form-group" id="spentGroup"><label>Spent Amount (USD) <span id="spentNote" style="font-size:10px;color:var(--text3);font-weight:400"></span></label><input id="f_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
@@ -96,8 +105,13 @@ function openAddModal() {
   document.getElementById('modalTitle').textContent = 'Add Budget Entry';
   document.getElementById('saveBtn').textContent = 'Create';
   ['f_fy','f_cat','f_alloc'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f_spent').value = '0';
-  document.getElementById('f_dept').value = 'Finance';
+  document.getElementById('f_dept').value  = 'Finance';
+  // Spent is always 0 on creation — derived from approved expenditure records, not manual entry.
+  const spentEl = document.getElementById('f_spent');
+  spentEl.value    = '0';
+  spentEl.readOnly = true;
+  spentEl.style.opacity = '0.45';
+  document.getElementById('spentNote').textContent = '— auto-calculated from approved expenditures';
   openModal('addModal');
 }
 
@@ -109,7 +123,11 @@ function openEditModal(b) {
   document.getElementById('f_dept').value  = b.department;
   document.getElementById('f_cat').value   = b.category;
   document.getElementById('f_alloc').value = b.allocated;
-  document.getElementById('f_spent').value = b.spent;
+  const spentEl = document.getElementById('f_spent');
+  spentEl.value    = b.spent;
+  spentEl.readOnly = false;
+  spentEl.style.opacity = '1';
+  document.getElementById('spentNote').textContent = '— editable on existing entries';
   openModal('addModal');
 }
 
@@ -153,8 +171,11 @@ async function loadBudget() {
     }
     tbody.innerHTML = data.map(b => {
       const pct = b.utilisation;
-      const statusCls = pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'paid';
-      const statusTxt = pct >= 90 ? 'Critical' : pct >= 70 ? 'Watch' : 'On Track';
+      const overBudget = pct > 100;
+      const statusCls = overBudget ? 'danger' : pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'paid';
+      const statusTxt = overBudget ? 'Supplementary' : pct >= 90 ? 'Critical' : pct >= 70 ? 'Watch' : 'On Track';
+      const pctDisplay = pct > 999 ? pct.toLocaleString() + '%' : pct + '%';
+      const pctTitle = overBudget ? `${pct}% — Mid-year supplementary budget or grant funding applied (COH 2024/2025 report)` : pct + '%';
       return `<tr>
         <td style="font-weight:500">${b.department}</td>
         <td style="color:var(--text2)">${b.fiscal_year}</td>
@@ -165,12 +186,12 @@ async function loadBudget() {
         <td>
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
-              <div style="width:${Math.min(pct,100)}%;height:100%;background:${pct>=90?'var(--danger)':pct>=70?'var(--warning)':'var(--success)'};border-radius:4px"></div>
+              <div style="width:${Math.min(pct,100)}%;height:100%;background:${overBudget?'var(--danger)':pct>=90?'var(--danger)':pct>=70?'var(--warning)':'var(--success)'};border-radius:4px"></div>
             </div>
-            <span style="font-size:12px;min-width:36px">${pct}%</span>
+            <span style="font-size:12px;min-width:52px;cursor:${overBudget?'help':'default'}" title="${pctTitle}">${overBudget?'<b>':''}${pctDisplay}${overBudget?'</b>':''}</span>
           </div>
         </td>
-        <td><span class="badge badge-${statusCls}">${statusTxt}</span></td>
+        <td><span class="badge badge-${statusCls}" title="${pctTitle}">${statusTxt}</span></td>
         <td style="white-space:nowrap">
           <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{department:b.department})}">Aging</a>
           <a class="btn btn-sm btn-secondary" href="${pageUrl('expenditures.html',{department:b.department})}">Expenditures</a>

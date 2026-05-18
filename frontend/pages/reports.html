@@ -236,8 +236,8 @@
               <span class="block-title" id="af-count">All System Events</span>
               <select id="af-action" onchange="loadActivity()" style="padding:4px 8px;font-size:11.5px;width:auto">
                 <option value="">All Actions</option>
-                <option>LOGIN</option><option>CREATE</option><option>UPDATE</option>
-                <option>DELETE</option><option>IMPORT</option><option>FLAG</option>
+                <option value="LOGIN">LOGIN</option><option value="CREATE">CREATE</option><option value="UPDATE">UPDATE</option>
+                <option value="DELETE">DELETE</option><option value="IMPORT">IMPORT</option><option value="FLAG">FLAG</option>
               </select>
             </div>
             <div class="block-body" id="af-feed" style="max-height:calc(100vh - 220px);overflow-y:auto">
@@ -271,9 +271,9 @@
                   <div class="form-group"><label>Property Address *</label><input id="rp_addr" placeholder="Street address"></div>
                   <div class="form-group"><label>Zone</label>
                     <select id="rp_zone">
-                      <option>Avondale</option><option>Borrowdale</option><option>Chitungwiza</option>
-                      <option>Glen Norah</option><option>Highfield</option><option>Kuwadzana</option>
-                      <option>Mabvuku</option><option>Mbare</option><option>Mount Pleasant</option><option>Southerton</option>
+                      <option value="Avondale">Avondale</option><option value="Borrowdale">Borrowdale</option><option value="Chitungwiza">Chitungwiza</option>
+                      <option value="Glen Norah">Glen Norah</option><option value="Highfield">Highfield</option><option value="Kuwadzana">Kuwadzana</option>
+                      <option value="Mabvuku">Mabvuku</option><option value="Mbare">Mbare</option><option value="Mount Pleasant">Mount Pleasant</option><option value="Southerton">Southerton</option>
                     </select>
                   </div>
                   <div class="form-group"><label>Phone</label><input id="rp_phone" placeholder="+263…"></div>
@@ -361,8 +361,8 @@
                   <div class="form-group"><label>Reference Number *</label><input id="exp_ref" placeholder="e.g. EXP-2025-001"></div>
                   <div class="form-group"><label>Department *</label>
                     <select id="exp_dept">
-                      <option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option>
-                      <option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option>
+                      <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
+                      <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
                     </select>
                   </div>
                   <div class="form-group"><label>Amount (USD) *</label><input id="exp_amt" type="number" step="0.01" placeholder="0.00"></div>
@@ -633,7 +633,7 @@
                 <div class="fgrid">
                   <div class="form-group"><label>Fiscal Year *</label><input id="b_fy" placeholder="e.g. 2025/2026"></div>
                   <div class="form-group"><label>Department *</label>
-                    <select id="b_dept"><option>Finance</option><option>Water &amp; Sanitation</option><option>Roads</option><option>Waste Management</option><option>Health</option><option>Human Resources</option><option>ICT</option></select>
+                    <select id="b_dept"><option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option><option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option></select>
                   </div>
                   <div class="form-group"><label>Category</label><input id="b_cat" placeholder="e.g. Operational"></div>
                   <div class="form-group"><label>Allocated (USD) *</label><input id="b_alloc" type="number" step="0.01" placeholder="0.00"></div>
@@ -859,7 +859,7 @@ async function loadOverview() {
     $('ov-outstanding').textContent = fmtMoney(summary.total_outstanding || 0);
     $('ov-rate').textContent        = (summary.collection_rate || 0) + '%';
     $('ov-expend').textContent      = fmtMoney(summary.total_expenditure || 0);
-    $('ov-rp').textContent          = (summary.active_ratepayers || 0).toLocaleString();
+    $('ov-rp').textContent          = (summary.ratepayers_count || 0).toLocaleString();
 
     // Category chart
     if (catData?.length) {
