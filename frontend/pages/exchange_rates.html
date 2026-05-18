@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Exchange Rates Admin</title>
+  <link rel="stylesheet" href="../css/shared.css" />
+  <style>body{padding:18px;font-family:Segoe UI,Arial,sans-serif}table{border-collapse:collapse;width:100%;margin-bottom:12px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f4f6fb}</style>
+</head>
+<body>
+  <h1>Exchange Rates (Admin)</h1>
+  <div id="msg" aria-live="polite" style="margin-bottom:8px;color:#333"></div>
+
+  <table id="rates">
+    <thead>
+      <tr><th>Currency</th><th>Rate → USD</th><th>Source</th><th>Manual</th><th>Updated</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>Set / Override Rate</h2>
+  <form id="setForm">
+    <label>Currency: <select id="currency"><option>ZWG</option><option>ZIG</option><option>USD</option></select></label>
+    <label style="margin-left:12px">Rate to USD: <input id="rate" type="number" step="0.0000001" required /></label>
+    <label style="margin-left:12px">Source: <input id="source" placeholder="source (optional)" /></label>
+    <button type="submit">Save</button>
+    <button type="button" id="fetchBtn">Fetch From Provider</button>
+  </form>
+
+  <script>
+    const setMsg = (t) => document.getElementById('msg').textContent = t || '';
+    async function load() {
+      const tbody = document.querySelector('#rates tbody'); tbody.innerHTML = '';
+      const currencies = ['ZWG','ZIG','USD'];
+      for (const c of currencies) {
+        try {
+          const res = await fetch('/api/exchange-rate?currency=' + c);
+          if (!res.ok) throw res;
+          const d = await res.json();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${d.currency}</td><td>${d.rate_to_usd}</td><td>${d.source||''}</td><td>${d.manual}</td><td>${d.updated_at}</td><td><button data-c="${d.currency}" class="fetch">Fetch</button></td>`;
+          tbody.appendChild(tr);
+        } catch (e) {
+          const tr = document.createElement('tr'); tr.innerHTML = `<td>${c}</td><td colspan="5">(no rate)</td>`; tbody.appendChild(tr);
+        }
+      }
+      attachButtons();
+    }
+
+    function attachButtons(){
+      document.querySelectorAll('.fetch').forEach(b => b.onclick = async () => {
+        const c = b.dataset.c; setMsg('Fetching ' + c + '...');
+        const res = await fetch('/api/exchange-rate/fetch?currency=' + c, { method: 'POST' });
+        setMsg(res.ok ? 'Fetched ' + c : 'Fetch failed: ' + res.status);
+        if (res.ok) load();
+      });
+    }
+
+    document.getElementById('fetchBtn').onclick = async () => {
+      const c = document.getElementById('currency').value; setMsg('Fetching ' + c + '...');
+      const res = await fetch('/api/exchange-rate/fetch?currency=' + c, { method: 'POST' });
+      setMsg(res.ok ? 'Fetched ' + c : 'Fetch failed: ' + res.status);
+      if (res.ok) load();
+    };
+
+    document.getElementById('setForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const payload = { currency: document.getElementById('currency').value, rate_to_usd: parseFloat(document.getElementById('rate').value), source: document.getElementById('source').value || 'manual-ui', manual: true };
+      setMsg('Saving...');
+      const res = await fetch('/api/exchange-rate/set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      setMsg(res.ok ? 'Saved' : 'Save failed: ' + res.status);
+      if (res.ok) load();
+    };
+
+    window.addEventListener('load', load);
+  </script>
+</body>
+</html>
