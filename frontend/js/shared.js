@@ -140,6 +140,7 @@ function buildSidebar(activePage) {
     { label: 'Dashboard',        icon: '▪', page: 'dashboard',    href: 'dashboard.html',    roles: [] },
     { label: 'Ratepayers',       icon: '▪', page: 'ratepayers',   href: 'ratepayers.html',   roles: [] },
     { label: 'Invoices',         icon: '▪', page: 'invoices',     href: 'invoices.html',     roles: [] },
+    { label: 'Billing',          icon: '▪', page: 'billing',      href: 'billing.html',      roles: [] },
     { label: 'Payments',         icon: '▪', page: 'payments',     href: 'payments.html',     roles: [] },
     { label: 'Expenditure',      icon: '▪', page: 'expenditures', href: 'expenditures.html', roles: [] },
     { label: 'Budget',           icon: '▪', page: 'budget',       href: 'budget.html',       roles: [] },

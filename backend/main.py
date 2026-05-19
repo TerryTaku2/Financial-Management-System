@@ -32,7 +32,7 @@ from database import (get_db, User, Ratepayer, Invoice, Payment, Expenditure,
                       Budget, AuditLog, LeakageAlert, RevenueTarget,
                       UserRole, PaymentStatus, RevenueCategory, AnomalyFlag,
                       LoginAttempt, PaymentPlan, PaymentPlanStatus, SystemNotification,
-                      ExchangeRate)
+                      ExchangeRate, BillingRate, BillingRun)
 from auth import (verify_password, hash_password, create_access_token,
                   get_current_user, require_roles)
 
@@ -678,29 +678,102 @@ def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
 @app.get("/api/dashboard/summary")
 def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     refresh_overdue_invoices(db)
-    total_billed     = db.query(func.sum(Invoice.amount)).scalar() or 0
-    total_collected  = usd_payment_sum(db.query(Payment))
+    # Revenue balance: uses Invoice.amount_paid so the equation is always exact:
+    # total_billed = total_collected + total_outstanding (sum(amount) = sum(amount_paid) + sum(balance))
+    total_billed      = db.query(func.sum(Invoice.amount)).scalar() or 0
+    total_collected   = db.query(func.sum(Invoice.amount_paid)).scalar() or 0
     total_outstanding = db.query(func.sum(Invoice.balance)).scalar() or 0
-    overdue_count    = db.query(Invoice).filter(Invoice.status == PaymentStatus.overdue).count()
-    high_alerts      = db.query(LeakageAlert).filter(LeakageAlert.is_resolved == False).count()
+    collection_rate   = round(total_collected / total_billed * 100, 1) if total_billed > 0 else 0
+
+    # Actual payments received via Payment table (USD-equivalent, includes ZIG conversion)
+    payments_received_usd = usd_payment_sum(db.query(Payment))
+
+    # Invoice breakdown by status
+    inv_pending  = db.query(Invoice).filter(Invoice.status == PaymentStatus.pending).count()
+    inv_paid     = db.query(Invoice).filter(Invoice.status == PaymentStatus.paid).count()
+    inv_overdue  = db.query(Invoice).filter(Invoice.status == PaymentStatus.overdue).count()
+    inv_disputed = db.query(Invoice).filter(Invoice.status == PaymentStatus.disputed).count()
+    inv_waived   = db.query(Invoice).filter(Invoice.status == PaymentStatus.waived).count()
+    inv_total    = db.query(Invoice).count()
+    overdue_bal  = db.query(func.sum(Invoice.balance)).filter(
+        Invoice.status == PaymentStatus.overdue).scalar() or 0
+
+    # Payments & reconciliation
+    pmt_total     = db.query(Payment).count()
+    recon_count   = db.query(Payment).filter(Payment.is_reconciled == True).count()
+    unrecon_count = pmt_total - recon_count
+    recon_rate    = round(recon_count / pmt_total * 100, 1) if pmt_total > 0 else 0
+    unrecon_amt   = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
+    method_totals = {}
+    for method in ["cash", "ecocash", "bank_transfer", "rtgs", "zipit"]:
+        method_totals[method] = round(usd_payment_sum(
+            db.query(Payment).filter(Payment.payment_method == method)), 2)
+
+    # Budget & Expenditure
+    total_allocated   = db.query(func.sum(Budget.allocated_amount)).scalar() or 0
+    total_spent       = db.query(func.sum(Budget.spent_amount)).scalar() or 0
+    budget_remaining  = total_allocated - total_spent
+    budget_util       = round(total_spent / total_allocated * 100, 1) if total_allocated > 0 else 0
+    total_expenditure = db.query(func.sum(Expenditure.amount)).scalar() or 0
+    pending_approval  = db.query(Expenditure).filter(Expenditure.is_approved == False).count()
+
+    # Ratepayers
+    active_rp   = db.query(Ratepayer).filter(Ratepayer.is_active == True).count()
+    inactive_rp = db.query(Ratepayer).filter(Ratepayer.is_active == False).count()
+
+    # Aging buckets (outstanding balances by overdue age)
+    today = now()
+    aging = {"current": 0.0, "days_1_30": 0.0, "days_31_60": 0.0,
+             "days_61_90": 0.0, "days_91_120": 0.0, "days_120_plus": 0.0}
+    for inv in db.query(Invoice).filter(Invoice.balance > 0).all():
+        days = (today - inv.due_date).days
+        if days <= 0:    aging["current"]      += inv.balance
+        elif days <= 30: aging["days_1_30"]    += inv.balance
+        elif days <= 60: aging["days_31_60"]   += inv.balance
+        elif days <= 90: aging["days_61_90"]   += inv.balance
+        elif days <=120: aging["days_91_120"]  += inv.balance
+        else:            aging["days_120_plus"]+= inv.balance
+    aging = {k: round(v, 2) for k, v in aging.items()}
+
+    # Leakage & anomalies
+    active_alerts    = db.query(LeakageAlert).filter(LeakageAlert.is_resolved == False).count()
     anomaly_invoices = db.query(Invoice).filter(Invoice.anomaly_flag != AnomalyFlag.none).count()
     anomaly_payments = db.query(Payment).filter(Payment.anomaly_flag != AnomalyFlag.none).count()
-    collection_rate  = round((total_collected / total_billed * 100), 1) if total_billed > 0 else 0
-    # Leakage Risk Index: weighted sum of risk exposures.
-    # Weights derived from ACFE (2022) Revenue Assurance Framework:
-    #   40% of unreconciled payments â†' confirmed leakage (cash received, not tracked)
-    #   25% of overdue balance â†' at-risk revenue (NCC 2023: 25% recovery rate for overdue >90d)
-    overdue_bal   = db.query(func.sum(Invoice.balance)).filter(Invoice.status == PaymentStatus.overdue).scalar() or 0
-    unrecon_amt   = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
     leakage_estimate = round(unrecon_amt * 0.40 + overdue_bal * 0.25, 2)
+
     return {
-        "total_billed": round(total_billed, 2), "total_collected": round(total_collected, 2),
-        "total_outstanding": round(total_outstanding, 2), "collection_rate": collection_rate,
-        "overdue_count": overdue_count, "active_alerts": high_alerts,
-        "anomaly_count": anomaly_invoices + anomaly_payments, "leakage_estimate": leakage_estimate,
-        "ratepayers_count": db.query(Ratepayer).count(),
-        "invoices_count": db.query(Invoice).count(),
-        "payments_count": db.query(Payment).count(),
+        # Revenue balance (always sums: billed = collected + outstanding)
+        "total_billed": round(total_billed, 2),
+        "total_collected": round(total_collected, 2),
+        "total_outstanding": round(total_outstanding, 2),
+        "collection_rate": collection_rate,
+        "payments_received_usd": round(payments_received_usd, 2),
+        # Invoice breakdown
+        "invoices_count": inv_total,
+        "inv_pending": inv_pending, "inv_paid": inv_paid,
+        "inv_overdue": inv_overdue, "inv_disputed": inv_disputed, "inv_waived": inv_waived,
+        "overdue_count": inv_overdue, "overdue_balance": round(overdue_bal, 2),
+        # Payments & reconciliation
+        "payments_count": pmt_total,
+        "reconciled_count": recon_count, "unreconciled_count": unrecon_count,
+        "reconciliation_rate": recon_rate, "unreconciled_amount": round(unrecon_amt, 2),
+        "payment_methods": method_totals,
+        # Budget & expenditure
+        "total_allocated": round(total_allocated, 2),
+        "total_spent": round(total_spent, 2),
+        "budget_remaining": round(budget_remaining, 2),
+        "budget_utilisation": budget_util,
+        "total_expenditure": round(total_expenditure, 2),
+        "pending_approval_count": pending_approval,
+        # Ratepayers
+        "ratepayers_count": active_rp + inactive_rp,
+        "active_ratepayers": active_rp, "inactive_ratepayers": inactive_rp,
+        # Aging
+        "aging": aging,
+        # Leakage
+        "active_alerts": active_alerts,
+        "anomaly_count": anomaly_invoices + anomaly_payments,
+        "leakage_estimate": leakage_estimate,
     }
 
 @app.get("/api/dashboard/revenue-by-category")
@@ -3502,6 +3575,226 @@ def export_risk_register(
 @app.get("/api/ai/status")
 def ai_status(current_user: User = Depends(get_current_user)):
     return {"available": False}
+
+# ─── Billing: Rate Configuration ──────────────────────────────────────────────
+
+class BillingRateCreate(BaseModel):
+    category: str
+    flat_amount: float = Field(..., ge=0)
+    description: Optional[str] = None
+    is_active: bool = True
+
+class BillingRateUpdate(BaseModel):
+    flat_amount: Optional[float] = Field(None, ge=0)
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@app.get("/api/billing/rates")
+def list_billing_rates(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rates = db.query(BillingRate).order_by(BillingRate.category).all()
+    result = []
+    for r in rates:
+        updater = db.query(User).filter(User.id == r.updated_by).first() if r.updated_by else None
+        result.append({
+            "id": r.id, "category": r.category, "flat_amount": r.flat_amount,
+            "description": r.description, "is_active": r.is_active,
+            "updated_by": updater.full_name if updater else None,
+            "updated_at": str(r.updated_at)[:19]
+        })
+    return result
+
+@app.post("/api/billing/rates", status_code=201)
+def create_billing_rate(data: BillingRateCreate, db: Session = Depends(get_db),
+                        current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant))):
+    existing = db.query(BillingRate).filter(BillingRate.category == data.category).first()
+    if existing:
+        raise HTTPException(400, f"Rate for category '{data.category}' already exists. Use PUT to update it.")
+    rate = BillingRate(category=data.category, flat_amount=data.flat_amount,
+                       description=data.description, is_active=data.is_active,
+                       updated_by=current_user.id)
+    db.add(rate); db.flush()
+    db.add(AuditLog(user_id=current_user.id, action="CREATE", table_name="billing_rates",
+                    record_id=rate.id, description=f"Billing rate created for {data.category}: ${data.flat_amount}"))
+    db.commit()
+    return {"id": rate.id, "message": "Billing rate created"}
+
+@app.put("/api/billing/rates/{rate_id}")
+def update_billing_rate(rate_id: int, data: BillingRateUpdate, db: Session = Depends(get_db),
+                        current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant))):
+    rate = db.query(BillingRate).filter(BillingRate.id == rate_id).first()
+    if not rate: raise HTTPException(404, "Billing rate not found")
+    if data.flat_amount is not None: rate.flat_amount = data.flat_amount
+    if data.description is not None: rate.description = data.description
+    if data.is_active is not None: rate.is_active = data.is_active
+    rate.updated_by = current_user.id
+    rate.updated_at = now()
+    db.add(AuditLog(user_id=current_user.id, action="UPDATE", table_name="billing_rates",
+                    record_id=rate_id, description=f"Billing rate updated for {rate.category}"))
+    db.commit()
+    return {"message": "Billing rate updated"}
+
+@app.delete("/api/billing/rates/{rate_id}")
+def delete_billing_rate(rate_id: int, db: Session = Depends(get_db),
+                        current_user: User = Depends(require_roles(UserRole.admin))):
+    rate = db.query(BillingRate).filter(BillingRate.id == rate_id).first()
+    if not rate: raise HTTPException(404, "Billing rate not found")
+    db.add(AuditLog(user_id=current_user.id, action="DELETE", table_name="billing_rates",
+                    record_id=rate_id, description=f"Billing rate deleted for {rate.category}"))
+    db.delete(rate); db.commit()
+    return {"message": "Billing rate deleted"}
+
+# ─── Billing: Runs ────────────────────────────────────────────────────────────
+
+class BillingRunCreate(BaseModel):
+    billing_period: str
+    categories: Optional[List[str]] = None
+    due_date: str
+    notes: Optional[str] = None
+
+@app.get("/api/billing/runs")
+def list_billing_runs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    runs = db.query(BillingRun).order_by(desc(BillingRun.created_at)).limit(50).all()
+    result = []
+    for r in runs:
+        creator = db.query(User).filter(User.id == r.created_by).first()
+        result.append({
+            "id": r.id, "run_number": r.run_number, "billing_period": r.billing_period,
+            "categories": r.categories, "due_date": str(r.due_date)[:10],
+            "invoices_created": r.invoices_created, "total_amount": r.total_amount,
+            "status": r.status, "notes": r.notes,
+            "created_by": creator.full_name if creator else None,
+            "created_at": str(r.created_at)[:19]
+        })
+    return result
+
+@app.post("/api/billing/runs", status_code=201)
+def execute_billing_run(data: BillingRunCreate, db: Session = Depends(get_db),
+                        current_user: User = Depends(require_roles(UserRole.admin, UserRole.accountant, UserRole.revenue_officer))):
+    due = datetime.fromisoformat(data.due_date)
+    run_num = "BRN-" + "".join(random.choices(string.digits, k=8))
+
+    target_cats = data.categories if data.categories else [c.value for c in RevenueCategory]
+    rates = {r.category: r.flat_amount for r in
+             db.query(BillingRate).filter(BillingRate.is_active == True,
+                                          BillingRate.category.in_(target_cats)).all()}
+    if not rates:
+        raise HTTPException(400, "No active billing rates found for the selected categories. Configure rates first.")
+
+    ratepayers = db.query(Ratepayer).filter(Ratepayer.is_active == True).all()
+    created = 0
+    total_amount = 0.0
+    errors = []
+
+    for rp in ratepayers:
+        for cat, amount in rates.items():
+            if amount <= 0:
+                continue
+            fp = compute_invoice_fingerprint(rp.id, cat, amount, data.due_date)
+            if db.query(Invoice).filter(Invoice.fingerprint == fp).first():
+                continue
+            inv_num = "INV-" + "".join(random.choices(string.digits, k=8))
+            cat_amounts = [r[0] for r in db.query(Invoice.amount).filter(Invoice.category == cat).all()]
+            anomaly_flag, anomaly_reason = _detect_anomaly(amount, cat_amounts)
+            inv = Invoice(invoice_number=inv_num, ratepayer_id=rp.id, category=cat,
+                          amount=amount, amount_paid=0.0, balance=amount,
+                          due_date=due, created_by=current_user.id, fingerprint=fp,
+                          notes=f"Billing run {run_num} — {data.billing_period}",
+                          anomaly_flag=anomaly_flag, anomaly_reason=anomaly_reason)
+            db.add(inv)
+            created += 1
+            total_amount += amount
+
+    run = BillingRun(run_number=run_num, billing_period=data.billing_period,
+                     categories=",".join(target_cats), due_date=due,
+                     invoices_created=created, total_amount=round(total_amount, 2),
+                     status="completed", notes=data.notes, created_by=current_user.id)
+    db.add(run)
+    db.add(AuditLog(user_id=current_user.id, action="CREATE", table_name="billing_runs",
+                    description=f"Billing run {run_num}: {created} invoices, ${total_amount:.2f}"))
+    db.commit()
+    return {"run_number": run_num, "invoices_created": created,
+            "total_amount": round(total_amount, 2), "message": f"Billing run complete: {created} invoices generated"}
+
+@app.get("/api/billing/runs/{run_id}")
+def get_billing_run(run_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    run = db.query(BillingRun).filter(BillingRun.id == run_id).first()
+    if not run: raise HTTPException(404, "Billing run not found")
+    invoices = db.query(Invoice).filter(Invoice.notes.like(f"%{run.run_number}%")).all()
+    inv_list = []
+    for inv in invoices:
+        rp = db.query(Ratepayer).filter(Ratepayer.id == inv.ratepayer_id).first()
+        inv_list.append({
+            "id": inv.id, "invoice_number": inv.invoice_number,
+            "ratepayer": rp.full_name if rp else str(inv.ratepayer_id),
+            "account_number": rp.account_number if rp else "",
+            "category": inv.category, "amount": inv.amount,
+            "status": inv.status, "due_date": str(inv.due_date)[:10]
+        })
+    creator = db.query(User).filter(User.id == run.created_by).first()
+    return {
+        "id": run.id, "run_number": run.run_number, "billing_period": run.billing_period,
+        "categories": run.categories, "due_date": str(run.due_date)[:10],
+        "invoices_created": run.invoices_created, "total_amount": run.total_amount,
+        "status": run.status, "notes": run.notes,
+        "created_by": creator.full_name if creator else None,
+        "created_at": str(run.created_at)[:19],
+        "invoices": inv_list
+    }
+
+# ─── Billing: Account Statement ───────────────────────────────────────────────
+
+@app.get("/api/billing/statement/{ratepayer_id}")
+def billing_statement(ratepayer_id: int, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    rp = db.query(Ratepayer).filter(Ratepayer.id == ratepayer_id).first()
+    if not rp: raise HTTPException(404, "Ratepayer not found")
+
+    invoices = db.query(Invoice).filter(Invoice.ratepayer_id == ratepayer_id)\
+                 .order_by(desc(Invoice.issue_date)).all()
+    payments = db.query(Payment).filter(Payment.ratepayer_id == ratepayer_id)\
+                 .order_by(desc(Payment.payment_date)).all()
+
+    total_billed   = sum(i.amount for i in invoices)
+    total_paid     = sum(i.amount_paid for i in invoices)
+    total_balance  = sum(i.balance for i in invoices)
+    overdue_balance = sum(i.balance for i in invoices if i.status == PaymentStatus.overdue)
+
+    inv_rows = [{
+        "id": i.id, "invoice_number": i.invoice_number,
+        "category": i.category, "amount": i.amount,
+        "amount_paid": i.amount_paid, "balance": i.balance,
+        "issue_date": str(i.issue_date)[:10], "due_date": str(i.due_date)[:10],
+        "status": i.status, "anomaly_flag": i.anomaly_flag
+    } for i in invoices]
+
+    pmt_rows = [{
+        "id": p.id, "receipt_number": p.receipt_number,
+        "amount": p.amount, "currency": p.currency,
+        "payment_method": p.payment_method,
+        "payment_date": str(p.payment_date)[:10],
+        "is_reconciled": p.is_reconciled
+    } for p in payments]
+
+    return {
+        "ratepayer": {
+            "id": rp.id, "account_number": rp.account_number,
+            "full_name": rp.full_name, "address": rp.address,
+            "ward": rp.ward, "zone": rp.zone,
+            "phone": rp.phone, "email": rp.email,
+            "property_type": rp.property_type
+        },
+        "summary": {
+            "total_billed": round(total_billed, 2),
+            "total_paid": round(total_paid, 2),
+            "total_balance": round(total_balance, 2),
+            "overdue_balance": round(overdue_balance, 2),
+            "invoice_count": len(invoices),
+            "payment_count": len(payments)
+        },
+        "invoices": inv_rows,
+        "payments": pmt_rows,
+        "generated_at": str(now())[:19]
+    }
 
 # ─── WebSocket ─────────────────────────────────────────────────────────────────
 

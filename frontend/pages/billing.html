@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Billing — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Billing Management</span>
+      <div class="topbar-right" id="topbarActions"></div>
+    </div>
+    <div class="page-content">
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
+        <button class="tab-btn active" id="tab-runs"       onclick="switchTab('runs')">Billing Runs</button>
+        <button class="tab-btn"        id="tab-rates"      onclick="switchTab('rates')">Rate Configuration</button>
+        <button class="tab-btn"        id="tab-statement"  onclick="switchTab('statement')">Account Statement</button>
+      </div>
+
+      <!-- ── Tab: Billing Runs ── -->
+      <div id="pane-runs">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Billing Runs</span>
+            <button class="btn btn-primary btn-sm" onclick="openRunModal()">+ New Billing Run</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Run #</th><th>Period</th><th>Categories</th>
+                <th>Due Date</th><th>Invoices</th><th>Total Amount</th>
+                <th>Status</th><th>Created By</th><th>Created</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="runsTable"><tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Rate Configuration ── -->
+      <div id="pane-rates" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Service Charge Rates</span>
+            <button class="btn btn-primary btn-sm" onclick="openRateModal()">+ Add Rate</button>
+          </div>
+          <div style="font-size:12px;color:var(--text2);padding:0 16px 12px">
+            Configure the monthly flat-rate charge per service category. These rates are used when executing a billing run to generate invoices for all active ratepayers.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Category</th><th>Monthly Charge (USD)</th><th>Description</th>
+                <th>Status</th><th>Last Updated</th><th>Updated By</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="ratesTable"><tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Account Statement ── -->
+      <div id="pane-statement" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Account Statement</span>
+            <button class="btn btn-secondary btn-sm" onclick="printStatement()" id="btnPrint" style="display:none">Print / PDF</button>
+          </div>
+          <div style="display:flex;gap:8px;padding:0 16px 16px;flex-wrap:wrap">
+            <input type="text" id="stmtSearch" placeholder="Search by account number or name..." style="min-width:280px"
+                   oninput="debounceSearch()">
+            <button class="btn btn-primary btn-sm" onclick="loadStatementSearch()">Search</button>
+          </div>
+          <!-- Ratepayer picker results -->
+          <div id="stmtPickerWrap" style="padding:0 16px 8px;display:none">
+            <div id="stmtPicker" style="border:1px solid var(--border);border-radius:6px;max-height:180px;overflow-y:auto"></div>
+          </div>
+          <!-- Statement output -->
+          <div id="statementOutput" style="display:none">
+            <div style="padding:16px;border-top:1px solid var(--border)">
+              <div id="stmtHeader" style="margin-bottom:16px"></div>
+              <!-- Summary bar -->
+              <div class="stats-grid" id="stmtSummary" style="margin-bottom:16px"></div>
+              <!-- Invoices -->
+              <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text1)">Invoices</div>
+              <div class="table-wrap" style="margin-bottom:24px">
+                <table><thead><tr>
+                  <th>Invoice #</th><th>Category</th><th>Issue Date</th><th>Due Date</th>
+                  <th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th>
+                </tr></thead>
+                <tbody id="stmtInvTable"></tbody></table>
+              </div>
+              <!-- Payments -->
+              <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text1)">Payments Received</div>
+              <div class="table-wrap">
+                <table><thead><tr>
+                  <th>Receipt #</th><th>Date</th><th>Amount</th><th>Currency</th>
+                  <th>Method</th><th>Reconciled</th>
+                </tr></thead>
+                <tbody id="stmtPmtTable"></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── New Billing Run Modal ── -->
+<div class="modal-overlay" id="runModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Execute Billing Run</span>
+      <button class="modal-close" onclick="closeModal('runModal')">×</button>
+    </div>
+    <div class="form-group">
+      <label>Billing Period <span style="color:var(--danger)">*</span></label>
+      <input id="run_period" type="month" style="width:100%">
+    </div>
+    <div class="form-group">
+      <label>Due Date <span style="color:var(--danger)">*</span></label>
+      <input id="run_due" type="date">
+    </div>
+    <div class="form-group">
+      <label>Categories (leave all unchecked to bill all active categories)</label>
+      <div id="runCatChecks" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px"></div>
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <textarea id="run_notes" rows="2" placeholder="e.g. May 2026 monthly billing"></textarea>
+    </div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--text2);margin-bottom:4px">
+      This will generate one invoice per active ratepayer per selected category using the configured rates. Duplicate invoices (same ratepayer, category, amount, due date) are automatically skipped.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('runModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="executeRun()" id="btnExecuteRun">Execute Run</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Run Detail Modal ── -->
+<div class="modal-overlay" id="runDetailModal">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <span class="modal-title" id="runDetailTitle">Run Details</span>
+      <button class="modal-close" onclick="closeModal('runDetailModal')">×</button>
+    </div>
+    <div id="runDetailBody" style="max-height:480px;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('runDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add / Edit Rate Modal ── -->
+<div class="modal-overlay" id="rateModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <span class="modal-title" id="rateModalTitle">Add Billing Rate</span>
+      <button class="modal-close" onclick="closeModal('rateModal')">×</button>
+    </div>
+    <input type="hidden" id="rate_id">
+    <div class="form-group" id="rateCatWrap">
+      <label>Category <span style="color:var(--danger)">*</span></label>
+      <select id="rate_category">
+        <option value="rates">Rates</option><option value="water">Water</option>
+        <option value="sewerage">Sewerage</option><option value="refuse">Refuse</option>
+        <option value="licensing">Licensing</option><option value="parking">Parking</option>
+        <option value="rentals">Rentals</option><option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Monthly Charge (USD) <span style="color:var(--danger)">*</span></label>
+      <input id="rate_amount" type="number" step="0.01" min="0" placeholder="e.g. 25.00">
+    </div>
+    <div class="form-group">
+      <label>Description (optional)</label>
+      <input id="rate_desc" type="text" placeholder="e.g. Residential water flat rate">
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="rate_active" checked> Active (included in billing runs)
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('rateModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRate()">Save Rate</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('billing');
+
+const CATEGORIES = ['rates','water','sewerage','refuse','licensing','parking','rentals','other'];
+let _stmtDebounce = null;
+let _currentStmtRatepayerId = null;
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['runs','rates','statement'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+    document.getElementById('pane-'+t).style.display = t === tab ? '' : 'none';
+  });
+  const actions = document.getElementById('topbarActions');
+  actions.innerHTML = '';
+  if (tab === 'runs') loadRuns();
+  if (tab === 'rates') loadRates();
+}
+
+// ── Billing Runs ──────────────────────────────────────────────────────────
+async function loadRuns() {
+  const tbody = document.getElementById('runsTable');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr>';
+  try {
+    const runs = await apiFetch('/api/billing/runs');
+    if (!runs.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:32px">No billing runs yet. Click "+ New Billing Run" to start.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = runs.map(r => `
+      <tr>
+        <td><code style="font-size:11px">${r.run_number}</code></td>
+        <td>${r.billing_period}</td>
+        <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis">${(r.categories||'all').replace(/,/g,', ')}</td>
+        <td>${r.due_date}</td>
+        <td style="text-align:center">${r.invoices_created}</td>
+        <td>$${fmt(r.total_amount)}</td>
+        <td><span class="badge badge-${r.status === 'completed' ? 'green' : 'red'}">${r.status}</span></td>
+        <td>${r.created_by||'—'}</td>
+        <td style="font-size:11px">${r.created_at}</td>
+        <td><button class="btn btn-sm btn-secondary" onclick="viewRun(${r.id})">View</button></td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">${e.message}</td></tr>`; }
+}
+
+function openRunModal() {
+  // Default period = current year-month
+  const now = new Date();
+  document.getElementById('run_period').value = now.toISOString().slice(0,7);
+  const due = new Date(now.getFullYear(), now.getMonth()+1, 28);
+  document.getElementById('run_due').value = due.toISOString().slice(0,10);
+  document.getElementById('run_notes').value = '';
+
+  // Build category checkboxes from active rates
+  apiFetch('/api/billing/rates').then(rates => {
+    const active = rates.filter(r => r.is_active);
+    const wrap = document.getElementById('runCatChecks');
+    wrap.innerHTML = active.length ? active.map(r => `
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" value="${r.category}" checked>
+        ${r.category} ($${fmt(r.flat_amount)}/mo)
+      </label>`).join('') :
+      '<span style="color:var(--danger);font-size:12px">No active rates configured. Add rates first.</span>';
+  }).catch(() => {
+    document.getElementById('runCatChecks').innerHTML =
+      '<span style="color:var(--danger);font-size:12px">Could not load rates.</span>';
+  });
+  openModal('runModal');
+}
+
+async function executeRun() {
+  const period = document.getElementById('run_period').value.trim();
+  const due    = document.getElementById('run_due').value.trim();
+  if (!period || !due) { toast('Please fill in period and due date.', 'warning'); return; }
+
+  const checks = document.querySelectorAll('#runCatChecks input[type=checkbox]:checked');
+  const cats   = Array.from(checks).map(c => c.value);
+
+  const btn = document.getElementById('btnExecuteRun');
+  btn.disabled = true; btn.textContent = 'Processing...';
+  try {
+    const res = await apiPost('/api/billing/runs', {
+      billing_period: period,
+      categories: cats.length ? cats : null,
+      due_date: due,
+      notes: document.getElementById('run_notes').value.trim() || null
+    });
+    toast(res.message, 'success');
+    closeModal('runModal');
+    loadRuns();
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Execute Run';
+  }
+}
+
+async function viewRun(id) {
+  document.getElementById('runDetailBody').innerHTML = '<p style="padding:16px;color:var(--text2)">Loading...</p>';
+  openModal('runDetailModal');
+  try {
+    const r = await apiFetch(`/api/billing/runs/${id}`);
+    document.getElementById('runDetailTitle').textContent = `Run ${r.run_number} — ${r.billing_period}`;
+    const summary = `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 16px 0">
+        ${statBox('Period', r.billing_period)}
+        ${statBox('Invoices', r.invoices_created)}
+        ${statBox('Total Amount', '$'+fmt(r.total_amount))}
+        ${statBox('Due Date', r.due_date)}
+      </div>
+      ${r.notes ? `<p style="padding:4px 16px;font-size:12px;color:var(--text2)">${r.notes}</p>` : ''}`;
+    const rows = r.invoices.length ? r.invoices.map(i => `
+      <tr>
+        <td style="font-size:11px">${i.invoice_number}</td>
+        <td>${i.account_number}</td>
+        <td>${i.ratepayer}</td>
+        <td>${i.category}</td>
+        <td>$${fmt(i.amount)}</td>
+        <td>${i.due_date}</td>
+        <td><span class="badge badge-${statusColor(i.status)}">${i.status}</span></td>
+      </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No invoices found for this run.</td></tr>';
+    document.getElementById('runDetailBody').innerHTML = summary + `
+      <div class="table-wrap" style="margin:12px 16px">
+        <table><thead><tr>
+          <th>Invoice #</th><th>Account</th><th>Name</th><th>Category</th>
+          <th>Amount</th><th>Due</th><th>Status</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+  } catch(e) {
+    document.getElementById('runDetailBody').innerHTML = `<p style="padding:16px;color:var(--danger)">${e.message}</p>`;
+  }
+}
+
+// ── Rate Configuration ─────────────────────────────────────────────────────
+async function loadRates() {
+  const tbody = document.getElementById('ratesTable');
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>';
+  try {
+    const rates = await apiFetch('/api/billing/rates');
+    if (!rates.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px">No rates configured yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rates.map(r => `
+      <tr>
+        <td style="font-weight:600;text-transform:capitalize">${r.category}</td>
+        <td>$${fmt(r.flat_amount)}</td>
+        <td style="font-size:12px;color:var(--text2)">${r.description||'—'}</td>
+        <td><span class="badge badge-${r.is_active ? 'green' : 'red'}">${r.is_active ? 'Active' : 'Inactive'}</span></td>
+        <td style="font-size:11px">${r.updated_at}</td>
+        <td>${r.updated_by||'—'}</td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-secondary" onclick="editRate(${JSON.stringify(r).split('"').join('&quot;')})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteRate(${r.id},'${r.category}')">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">${e.message}</td></tr>`; }
+}
+
+function openRateModal() {
+  document.getElementById('rateModalTitle').textContent = 'Add Billing Rate';
+  document.getElementById('rate_id').value = '';
+  document.getElementById('rate_category').value = 'rates';
+  document.getElementById('rate_category').disabled = false;
+  document.getElementById('rate_amount').value = '';
+  document.getElementById('rate_desc').value = '';
+  document.getElementById('rate_active').checked = true;
+  openModal('rateModal');
+}
+
+function editRate(r) {
+  document.getElementById('rateModalTitle').textContent = 'Edit Billing Rate';
+  document.getElementById('rate_id').value = r.id;
+  document.getElementById('rate_category').value = r.category;
+  document.getElementById('rate_category').disabled = true;
+  document.getElementById('rate_amount').value = r.flat_amount;
+  document.getElementById('rate_desc').value = r.description || '';
+  document.getElementById('rate_active').checked = r.is_active;
+  openModal('rateModal');
+}
+
+async function saveRate() {
+  const id     = document.getElementById('rate_id').value;
+  const amount = parseFloat(document.getElementById('rate_amount').value);
+  if (isNaN(amount) || amount < 0) { toast('Enter a valid amount.', 'warning'); return; }
+  try {
+    if (id) {
+      await apiPut(`/api/billing/rates/${id}`, {
+        flat_amount: amount,
+        description: document.getElementById('rate_desc').value.trim() || null,
+        is_active: document.getElementById('rate_active').checked
+      });
+      toast('Rate updated.', 'success');
+    } else {
+      await apiPost('/api/billing/rates', {
+        category: document.getElementById('rate_category').value,
+        flat_amount: amount,
+        description: document.getElementById('rate_desc').value.trim() || null,
+        is_active: document.getElementById('rate_active').checked
+      });
+      toast('Rate created.', 'success');
+    }
+    closeModal('rateModal');
+    loadRates();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteRate(id, cat) {
+  if (!confirm(`Delete billing rate for "${cat}"? This cannot be undone.`)) return;
+  try {
+    await apiDelete(`/api/billing/rates/${id}`);
+    toast('Rate deleted.', 'success');
+    loadRates();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Account Statement ──────────────────────────────────────────────────────
+function debounceSearch() {
+  clearTimeout(_stmtDebounce);
+  _stmtDebounce = setTimeout(loadStatementSearch, 350);
+}
+
+async function loadStatementSearch() {
+  const q = document.getElementById('stmtSearch').value.trim();
+  if (!q) { document.getElementById('stmtPickerWrap').style.display = 'none'; return; }
+  try {
+    const data = await apiFetch(`/api/ratepayers?search=${encodeURIComponent(q)}&limit=8`);
+    const items = data.items || data;
+    const picker = document.getElementById('stmtPicker');
+    if (!items.length) {
+      picker.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text2)">No ratepayers found.</div>';
+    } else {
+      picker.innerHTML = items.map(rp => `
+        <div onclick="selectRatepayer(${rp.id})" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);hover:background:var(--bg3)"
+             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+          <strong>${rp.account_number}</strong> — ${rp.full_name}
+          <span style="font-size:11px;color:var(--text2);margin-left:6px">${rp.ward}, ${rp.zone}</span>
+        </div>`).join('');
+    }
+    document.getElementById('stmtPickerWrap').style.display = '';
+  } catch(e) {
+    document.getElementById('stmtPickerWrap').style.display = 'none';
+  }
+}
+
+async function selectRatepayer(id) {
+  document.getElementById('stmtPickerWrap').style.display = 'none';
+  _currentStmtRatepayerId = id;
+  await loadStatement(id);
+}
+
+async function loadStatement(id) {
+  document.getElementById('statementOutput').style.display = 'none';
+  try {
+    const s = await apiFetch(`/api/billing/statement/${id}`);
+    const rp = s.ratepayer;
+    const sm = s.summary;
+
+    document.getElementById('stmtSearch').value = `${rp.account_number} — ${rp.full_name}`;
+
+    document.getElementById('stmtHeader').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px">${rp.full_name}</div>
+          <div style="font-size:12px;color:var(--text2)">Account: <strong>${rp.account_number}</strong></div>
+          <div style="font-size:12px;color:var(--text2)">${rp.address}</div>
+          <div style="font-size:12px;color:var(--text2)">Ward ${rp.ward}, Zone ${rp.zone} &bull; ${rp.property_type}</div>
+          ${rp.phone ? `<div style="font-size:12px;color:var(--text2)">Tel: ${rp.phone}</div>` : ''}
+          ${rp.email ? `<div style="font-size:12px;color:var(--text2)">Email: ${rp.email}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text2)">Statement generated</div>
+          <div style="font-size:12px">${s.generated_at}</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text2)">City of Harare</div>
+          <div style="font-size:11px;color:var(--text2)">Financial Management System</div>
+        </div>
+      </div>`;
+
+    document.getElementById('stmtSummary').innerHTML = `
+      ${smBox('Total Billed', '$'+fmt(sm.total_billed), 'blue')}
+      ${smBox('Total Paid', '$'+fmt(sm.total_paid), 'green')}
+      ${smBox('Outstanding', '$'+fmt(sm.total_balance), sm.total_balance > 0 ? 'yellow' : 'green')}
+      ${smBox('Overdue', '$'+fmt(sm.overdue_balance), sm.overdue_balance > 0 ? 'red' : 'green')}`;
+
+    document.getElementById('stmtInvTable').innerHTML = s.invoices.length ?
+      s.invoices.map(i => `<tr>
+        <td style="font-size:11px">${i.invoice_number}</td>
+        <td style="text-transform:capitalize">${i.category}</td>
+        <td>${i.issue_date}</td>
+        <td>${i.due_date}</td>
+        <td>$${fmt(i.amount)}</td>
+        <td>$${fmt(i.amount_paid)}</td>
+        <td style="font-weight:${i.balance > 0 ? '700' : '400'};color:${i.balance > 0 ? 'var(--danger)' : 'inherit'}">$${fmt(i.balance)}</td>
+        <td><span class="badge badge-${statusColor(i.status)}">${i.status}</span></td>
+      </tr>`).join('') :
+      '<tr><td colspan="8" class="text-center text-muted">No invoices.</td></tr>';
+
+    document.getElementById('stmtPmtTable').innerHTML = s.payments.length ?
+      s.payments.map(p => `<tr>
+        <td style="font-size:11px">${p.receipt_number}</td>
+        <td>${p.payment_date}</td>
+        <td>$${fmt(p.amount)}</td>
+        <td>${p.currency}</td>
+        <td>${p.payment_method}</td>
+        <td><span class="badge badge-${p.is_reconciled ? 'green' : 'yellow'}">${p.is_reconciled ? 'Yes' : 'Pending'}</span></td>
+      </tr>`).join('') :
+      '<tr><td colspan="6" class="text-center text-muted">No payments recorded.</td></tr>';
+
+    document.getElementById('statementOutput').style.display = '';
+    document.getElementById('btnPrint').style.display = '';
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function printStatement() {
+  window.print();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function fmt(n) { return (+(n||0)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function statusColor(s) {
+  return {paid:'green',pending:'yellow',overdue:'red',disputed:'red',waived:'blue'}[s] || 'blue';
+}
+
+function statBox(label, value) {
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+    <div style="font-size:11px;color:var(--text2)">${label}</div>
+    <div style="font-size:15px;font-weight:700;margin-top:2px">${value}</div>
+  </div>`;
+}
+function smBox(label, value, color) {
+  return `<div class="stat-card ${color}"><div class="stat-value">${value}</div><div class="stat-label">${label}</div></div>`;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+(function() {
+  const p = getUrlParams();
+  if (p.tab) {
+    switchTab(p.tab);
+  } else {
+    loadRuns();
+  }
+  if (p.ratepayer_id) {
+    switchTab('statement');
+    loadStatement(parseInt(p.ratepayer_id));
+  }
+})();
+</script>
+<style>
+.tab-btn {
+  background: none; border: none; border-bottom: 3px solid transparent;
+  padding: 8px 18px; font-size: 13px; font-weight: 500; cursor: pointer;
+  color: var(--text2); transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -2px;
+}
+.tab-btn:hover { color: var(--text1); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.badge-blue   { background: #dbeafe; color: #1d4ed8; }
+@media print {
+  .sidebar, .topbar, .tab-btn, #stmtSearch, .btn, #stmtPickerWrap { display: none !important; }
+  .main-content { margin: 0 !important; }
+  #pane-statement { display: block !important; }
+  #statementOutput { display: block !important; }
+}
+</style>
+</body>
+</html>

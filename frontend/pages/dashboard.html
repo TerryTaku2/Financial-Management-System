@@ -21,16 +21,41 @@
     </div>
     <div class="page-content">
 
-      <!-- KPI Stats -->
+      <!-- Revenue Balance (KPI) -->
+      <div class="card" id="revenueBaCard">
+        <div class="card-header">
+          <span class="card-title">Revenue Balance ✓</span>
+          <span style="font-size:11px;color:var(--text2)">Verified: Billed = Collected + Outstanding</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;padding:15px">
+          <div>
+            <div style="color:var(--text2);font-size:12px;margin-bottom:4px">Total Billed (USD)</div>
+            <div id="statBilled" style="font-size:20px;font-weight:700">—</div>
+          </div>
+          <div>
+            <div style="color:var(--text2);font-size:12px;margin-bottom:4px">Total Collected (USD)</div>
+            <div id="statCollected" style="font-size:20px;font-weight:700;color:#2ecc71">—</div>
+          </div>
+          <div>
+            <div style="color:var(--text2);font-size:12px;margin-bottom:4px">Outstanding Balance (USD)</div>
+            <div id="statOutstanding" style="font-size:20px;font-weight:700;color:#f39c12">—</div>
+          </div>
+        </div>
+        <div style="background:var(--bg3);padding:10px 15px;border-radius:8px;font-size:12px;color:var(--text2);text-align:center">
+          <span id="balanceEquation">Equation: — = — + —</span>
+        </div>
+      </div>
+
+      <!-- KPI Stats Grid -->
       <div class="stats-grid" id="statsGrid">
-        <div class="stat-card blue" onclick="navigateTo('invoices.html')" style="cursor:pointer" title="View all invoices"><div class="stat-value" id="statBilled">—</div><div class="stat-label">Total Billed (USD)</div></div>
-        <div class="stat-card green" onclick="navigateTo('payments.html')" style="cursor:pointer" title="Summary dashboards convert ZIG/ZWG payments to USD-equivalent amounts."><div class="stat-value" id="statCollected">—</div><div class="stat-label">Total Collected <span style="font-size:9px;opacity:0.65;display:block;margin-top:1px">USD-equivalent across currencies</span></div></div>
-        <div class="stat-card yellow" onclick="navigateTo('aging.html')" style="cursor:pointer" title="View debtors aging"><div class="stat-value" id="statOutstanding">—</div><div class="stat-label">Outstanding Balance</div></div>
-        <div class="stat-card red" onclick="navigateTo('aging.html')" style="cursor:pointer" title="View aging analysis"><div class="stat-value" id="statLeakage">—</div><div class="stat-label">Est. Revenue Leakage</div></div>
-        <div class="stat-card blue" onclick="navigateTo('reports.html')" style="cursor:pointer" title="View financial reports"><div class="stat-value" id="statRate">—</div><div class="stat-label">Collection Rate</div></div>
-        <div class="stat-card red" onclick="navigateTo('leakage.html')" style="cursor:pointer" title="View leakage alerts"><div class="stat-value" id="statAlerts">—</div><div class="stat-label">Active Alerts</div></div>
-        <div class="stat-card yellow" onclick="navigateTo('invoices.html',{anomaly:'high'})" style="cursor:pointer" title="View high-anomaly invoices"><div class="stat-value" id="statAnomalies">—</div><div class="stat-label">Anomaly Flags</div></div>
-        <div class="stat-card green" onclick="navigateTo('ratepayers.html')" style="cursor:pointer" title="View ratepayer registry"><div class="stat-value" id="statRatepayers">—</div><div class="stat-label">Ratepayers</div></div>
+        <div class="stat-card blue" onclick="navigateTo('reports.html')" style="cursor:pointer"><div class="stat-value" id="statRate">—</div><div class="stat-label">Collection Rate</div></div>
+        <div class="stat-card red" onclick="navigateTo('aging.html')" style="cursor:pointer"><div class="stat-value" id="statLeakage">—</div><div class="stat-label">Est. Revenue Leakage</div></div>
+        <div class="stat-card red" onclick="navigateTo('leakage.html')" style="cursor:pointer"><div class="stat-value" id="statAlerts">—</div><div class="stat-label">Active Alerts</div></div>
+        <div class="stat-card yellow" onclick="navigateTo('invoices.html')" style="cursor:pointer"><div class="stat-value" id="statAnomalies">—</div><div class="stat-label">Anomaly Flags</div></div>
+        <div class="stat-card green" onclick="navigateTo('ratepayers.html')" style="cursor:pointer"><div class="stat-value" id="statRatepayers">—</div><div class="stat-label">Ratepayers</div></div>
+        <div class="stat-card blue" onclick="navigateTo('invoices.html')" style="cursor:pointer"><div class="stat-value" id="statInvoices">—</div><div class="stat-label">Total Invoices</div></div>
+        <div class="stat-card green" onclick="navigateTo('payments.html')" style="cursor:pointer"><div class="stat-value" id="statPayments">—</div><div class="stat-label">Total Payments</div></div>
+        <div class="stat-card yellow" onclick="navigateTo('aging.html')" style="cursor:pointer"><div class="stat-value" id="statOverdue">—</div><div class="stat-label">Overdue Invoices</div></div>
       </div>
 
       <!-- Charts Row -->
@@ -97,14 +122,26 @@ async function loadDashboard() {
       apiFetch('/api/dashboard/alerts'),
     ]);
 
+    // Revenue Balance (verify the equation)
     document.getElementById('statBilled').textContent = fmtMoney(summary.total_billed);
     document.getElementById('statCollected').textContent = fmtMoney(summary.total_collected);
     document.getElementById('statOutstanding').textContent = fmtMoney(summary.total_outstanding);
-    document.getElementById('statLeakage').textContent = fmtMoney(summary.leakage_estimate);
+    
+    // Verify the equation balances
+    const eq = summary.total_billed - (summary.total_collected + summary.total_outstanding);
+    const balanceStatus = Math.abs(eq) < 0.01 ? '✓ Balanced' : `⚠ Difference: ${fmtMoney(eq)}`;
+    document.getElementById('balanceEquation').textContent = 
+      `Equation: ${fmtMoney(summary.total_billed)} = ${fmtMoney(summary.total_collected)} + ${fmtMoney(summary.total_outstanding)} → ${balanceStatus}`;
+
+    // KPI Metrics
     document.getElementById('statRate').textContent = summary.collection_rate + '%';
+    document.getElementById('statLeakage').textContent = fmtMoney(summary.leakage_estimate);
     document.getElementById('statAlerts').textContent = summary.active_alerts;
     document.getElementById('statAnomalies').textContent = summary.anomaly_count;
     document.getElementById('statRatepayers').textContent = summary.ratepayers_count;
+    document.getElementById('statInvoices').textContent = summary.invoices_count;
+    document.getElementById('statPayments').textContent = summary.payments_count;
+    document.getElementById('statOverdue').textContent = summary.overdue_count;
 
     // Trend chart
     if (typeof Chart !== 'undefined') new Chart(document.getElementById('trendChart'), {
@@ -147,22 +184,104 @@ async function loadDashboard() {
         </div>`).join('');
     }
 
-    // Overview
+    // Comprehensive Overview Section - Invoice Status, Reconciliation, Budget, Aging
     document.getElementById('overviewContainer').innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:10px">
-        ${[
-          ['Total Invoices',   summary.invoices_count,           'invoices.html',  '{}'],
-          ['Total Payments',   summary.payments_count,           'payments.html',  '{}'],
-          ['Overdue Accounts', summary.overdue_count,            'invoices.html',  '{"status":"overdue"}'],
-          ['Debtors Aging',    'View →',                         'aging.html',     '{}'],
-          ['Collection Rate',  summary.collection_rate + '%',    'reports.html',   '{}'],
-        ].map(([label, val, href, params]) => `
-          <div onclick="navigateTo('${href}',${params})"
-               style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg3);border-radius:8px;cursor:pointer;transition:background .15s"
-               onmouseover="this.style.background='rgba(59,125,216,.1)'" onmouseout="this.style.background='var(--bg3)'">
-            <span style="color:var(--text2);font-size:13px">${label}</span>
-            <span style="font-weight:600;font-size:14px">${val}</span>
-          </div>`).join('')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px">
+        <!-- Invoice Status Breakdown -->
+        <div style="padding:15px;background:var(--bg3);border-radius:8px">
+          <div style="font-weight:600;margin-bottom:10px;font-size:13px">Invoice Status Breakdown</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Paid</span>
+              <span style="font-weight:600;color:#2ecc71">${summary.inv_paid}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Pending</span>
+              <span style="font-weight:600;color:#3b7dd8">${summary.inv_pending}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Overdue</span>
+              <span style="font-weight:600;color:#e74c3c">${summary.inv_overdue}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Disputed</span>
+              <span style="font-weight:600;color:#f39c12">${summary.inv_disputed}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Waived</span>
+              <span style="font-weight:600">${summary.inv_waived}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Reconciliation Status -->
+        <div style="padding:15px;background:var(--bg3);border-radius:8px">
+          <div style="font-weight:600;margin-bottom:10px;font-size:13px">Payment Reconciliation</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Reconciliation Rate</span>
+              <span style="font-weight:600;color:#2ecc71">${summary.reconciliation_rate}%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Reconciled Payments</span>
+              <span style="font-weight:600">${summary.reconciled_count}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Unreconciled</span>
+              <span style="font-weight:600;color:#e74c3c">${summary.unreconciled_count}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Unreconciled Amt (USD)</span>
+              <span style="font-weight:600;color:#e74c3c">${fmtMoney(summary.unreconciled_amount)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Budget & Expenditure -->
+        <div style="padding:15px;background:var(--bg3);border-radius:8px">
+          <div style="font-weight:600;margin-bottom:10px;font-size:13px">Budget Status</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Total Allocated</span>
+              <span style="font-weight:600">${fmtMoney(summary.total_allocated)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Total Spent</span>
+              <span style="font-weight:600;color:#e74c3c">${fmtMoney(summary.total_spent)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Budget Utilization</span>
+              <span style="font-weight:600;color:#2ecc71">${summary.budget_utilisation}%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Total Expenditure</span>
+              <span style="font-weight:600">${fmtMoney(summary.total_expenditure)}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Aging Summary -->
+        <div style="padding:15px;background:var(--bg3);border-radius:8px">
+          <div style="font-weight:600;margin-bottom:10px;font-size:13px">Outstanding by Age</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">Current</span>
+              <span style="font-weight:600;color:#2ecc71">${fmtMoney(summary.aging.current)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">1-30 Days</span>
+              <span style="font-weight:600">${fmtMoney(summary.aging.days_1_30)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">31-60 Days</span>
+              <span style="font-weight:600;color:#f39c12">${fmtMoney(summary.aging.days_31_60)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--text2)">> 120 Days</span>
+              <span style="font-weight:600;color:#e74c3c">${fmtMoney(summary.aging.days_120_plus)}</span>
+            </div>
+          </div>
+        </div>
       </div>`;
 
   } catch(e) { toast('Failed to load dashboard: ' + e.message, 'error'); }
@@ -178,28 +297,48 @@ async function exportDashboardPDF() {
 
     const kpiCols = ['Metric', 'Value'];
     const kpiRows = [
-      ['Total Billed (USD)',     fmtMoney(summary.total_billed)],
-      ['Total Collected (USD)',  fmtMoney(summary.total_collected)],
-      ['Outstanding Balance',    fmtMoney(summary.total_outstanding)],
-      ['Collection Rate',        summary.collection_rate + '%'],
-      ['Est. Revenue Leakage',   fmtMoney(summary.leakage_estimate)],
-      ['Active Alerts',          summary.active_alerts],
-      ['Anomaly Flags',          summary.anomaly_count],
-      ['Total Ratepayers',       summary.ratepayers_count],
+      ['Total Billed (USD)',           fmtMoney(summary.total_billed)],
+      ['Total Collected (USD)',        fmtMoney(summary.total_collected)],
+      ['Outstanding Balance (USD)',    fmtMoney(summary.total_outstanding)],
+      ['Collection Rate',              summary.collection_rate + '%'],
+      ['Est. Revenue Leakage',         fmtMoney(summary.leakage_estimate)],
+      ['', ''],
+      ['Invoice Status', ''],
+      ['  - Paid',                     summary.inv_paid],
+      ['  - Pending',                  summary.inv_pending],
+      ['  - Overdue',                  summary.inv_overdue],
+      ['  - Disputed',                 summary.inv_disputed],
+      ['  - Waived',                   summary.inv_waived],
+      ['', ''],
+      ['Payment Reconciliation', ''],
+      ['  - Reconciliation Rate',      summary.reconciliation_rate + '%'],
+      ['  - Reconciled Payments',      summary.reconciled_count],
+      ['  - Unreconciled Payments',    summary.unreconciled_count],
+      ['  - Unreconciled Amount (USD)',fmtMoney(summary.unreconciled_amount)],
+      ['', ''],
+      ['Budget & Expenditure', ''],
+      ['  - Total Allocated',          fmtMoney(summary.total_allocated)],
+      ['  - Total Spent',              fmtMoney(summary.total_spent)],
+      ['  - Budget Utilization %',     summary.budget_utilisation + '%'],
+      ['', ''],
+      ['Alerts & Anomalies', ''],
+      ['  - Active Alerts',            summary.active_alerts],
+      ['  - Anomaly Count',            summary.anomaly_count],
+      ['  - Total Ratepayers',         summary.ratepayers_count],
     ];
 
     const trendCols = ['Month', 'Billed (USD)', 'Collected (USD)'];
     const trendRows = (trend || []).map(t => [t.month, fmtMoney(t.billed), fmtMoney(t.collected)]);
 
-    const catCols = ['Revenue Category', 'Amount (USD)'];
-    const catRows = (cats || []).map(c => [c.category, fmtMoney(c.amount)]);
+    const catCols = ['Revenue Category', 'Billed (USD)', 'Collected (USD)'];
+    const catRows = (cats || []).map(c => [c.category, fmtMoney(c.billed), fmtMoney(c.collected)]);
 
     // Combine into a single export via multi-section approach
     const allCols = ['Section', 'Item', 'Value'];
     const allRows = [
-      ...kpiRows.map(r => ['KPI Summary', r[0], r[1]]),
+      ...kpiRows.map(r => ['Summary Metrics', r[0], r[1]]),
       ...trendRows.map(r => ['Monthly Trend', r[0], `Billed: ${r[1]} | Collected: ${r[2]}`]),
-      ...catRows.map(r => ['Revenue by Category', r[0], r[1]]),
+      ...catRows.map(r => ['Revenue by Category', r[0], `Billed: ${r[1]} | Collected: ${r[2]}`]),
     ];
 
     await exportPDF('Dashboard Summary', allCols, allRows, 'dashboard_summary.pdf',

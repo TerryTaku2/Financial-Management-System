@@ -241,4 +241,28 @@ class ExchangeRate(Base):
     manual = Column(Boolean, default=False)
     updated_at = Column(DateTime, default=utcnow)
 
+class BillingRate(Base):
+    __tablename__ = "billing_rates"
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(Enum(RevenueCategory), unique=True)
+    flat_amount = Column(Float, default=0.0)
+    description = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=utcnow)
+
+class BillingRun(Base):
+    __tablename__ = "billing_runs"
+    id = Column(Integer, primary_key=True, index=True)
+    run_number = Column(String, unique=True, index=True)
+    billing_period = Column(String)
+    categories = Column(String, nullable=True)
+    due_date = Column(DateTime)
+    invoices_created = Column(Integer, default=0)
+    total_amount = Column(Float, default=0.0)
+    status = Column(String, default="completed")
+    notes = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=utcnow)
+
 Base.metadata.create_all(bind=engine)
