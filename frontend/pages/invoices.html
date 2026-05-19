@@ -25,6 +25,7 @@
     <div class="page-content">
       <div class="card">
         <div class="filter-bar">
+          <input type="text" id="searchInput" placeholder="🔍  Search ratepayer name or account..." style="min-width:240px" oninput="debounceLoad()">
           <select id="statusFilter" onchange="loadInvoices()">
             <option value="">All Statuses</option>
             <option value="pending">Pending</option><option value="paid">Paid</option>
@@ -140,17 +141,25 @@ document.getElementById('f_due').value = d.toISOString().slice(0,10);
 
 function openAddModal() { openModal('addModal'); }
 
+let _debounceTimer = null;
+function debounceLoad() {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(() => loadInvoices(1), 350);
+}
+
 async function loadInvoices(page = 1) {
   currentPage = page;
   const status  = document.getElementById('statusFilter').value;
   const cat     = document.getElementById('categoryFilter').value;
   const anomaly = document.getElementById('anomalyFilter').value;
+  const search  = document.getElementById('searchInput').value.trim();
   const skip    = (page-1) * 30;
   try {
     let url = `/api/invoices?skip=${skip}&limit=30`;
     if (status)  url += `&status=${status}`;
     if (cat)     url += `&category=${cat}`;
     if (anomaly) url += `&anomaly=${anomaly}`;
+    if (search)  url += `&search=${encodeURIComponent(search)}`;
     if (window._filterRatepayerId) url += `&ratepayer_id=${window._filterRatepayerId}`;
     const data = await apiFetch(url);
     document.getElementById('countBadge').textContent = `${data.total} invoices`;
@@ -176,7 +185,9 @@ async function loadInvoices(page = 1) {
         <td>${anomalyBadge(inv.anomaly_flag)}</td>
         <td style="white-space:nowrap">
           ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="openEditModal(${JSON.stringify(inv).replace(/"/g,'&quot;')})">Edit</button>` : ''}
+          <button class="btn btn-sm btn-secondary" onclick="printInvoice(${JSON.stringify(inv).replace(/"/g,'&quot;')})">🖨 Print</button>
           <a class="btn btn-sm btn-secondary" href="${pageUrl('payments.html',{ratepayer_id:inv.ratepayer_id})}">Payments</a>
+          <button class="btn btn-sm btn-secondary" onclick="printStatement(${inv.ratepayer_id})">Statement</button>
           ${inv.balance > 0 ? `<a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{account:inv.account_number})}">Aging</a>` : ''}
           ${canEdit && inv.amount_paid == 0 ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id},'${inv.invoice_number}')">Delete</button>` : ''}
         </td>
@@ -254,6 +265,80 @@ async function importInvoices(input) {
     loadInvoices();
   } catch(e) { toast(e.message, 'error'); }
   input.value = '';
+}
+
+function printInvoice(inv) {
+  const w = window.open('', '_blank', 'width=720,height=900');
+  const statusColor = {paid:'#27ae60',pending:'#f39c12',overdue:'#e74c3c',disputed:'#8e44ad',waived:'#7f8c8d'}[inv.status] || '#333';
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Invoice ${inv.invoice_number}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#222;background:#fff;padding:32px}
+    .header{display:flex;align-items:center;gap:16px;border-bottom:3px solid #1f3864;padding-bottom:16px;margin-bottom:24px}
+    .header img{width:60px;height:60px;object-fit:contain}
+    .header-text h1{font-size:20px;color:#1f3864;font-weight:700}
+    .header-text p{font-size:12px;color:#555;margin-top:2px}
+    .inv-title{font-size:26px;font-weight:700;color:#1f3864;margin-bottom:4px}
+    .inv-number{font-size:13px;color:#555;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .box{background:#f4f7fb;border:1px solid #dde4f0;border-radius:6px;padding:14px}
+    .box label{font-size:10px;text-transform:uppercase;color:#888;display:block;margin-bottom:4px}
+    .box span{font-size:14px;font-weight:600;color:#222}
+    table{width:100%;border-collapse:collapse;margin-bottom:24px}
+    th{background:#1f3864;color:#fff;font-size:11px;padding:8px 12px;text-align:left}
+    td{padding:10px 12px;border-bottom:1px solid #eee;font-size:13px}
+    tr:nth-child(even) td{background:#f9fbff}
+    .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;background:${statusColor}}
+    .total-row td{font-weight:700;background:#eef3fb}
+    .footer{border-top:1px solid #dde;padding-top:12px;font-size:11px;color:#888;text-align:center}
+    @media print{body{padding:16px}.no-print{display:none}}
+  </style></head><body>
+  <div class="header">
+    <img src="/static/images/crest.png" alt="Crest" onerror="this.style.display='none'">
+    <div class="header-text">
+      <h1>City of Harare</h1>
+      <p>Financial Management System — Tax Invoice</p>
+    </div>
+  </div>
+  <div class="inv-title">${inv.invoice_number}</div>
+  <div class="inv-number">Issue Date: ${inv.issue_date} &nbsp;|&nbsp; Due Date: ${inv.due_date} &nbsp;|&nbsp; Status: <span class="status-badge">${inv.status.toUpperCase()}</span></div>
+  <div class="grid">
+    <div class="box"><label>Billed To</label><span>${inv.ratepayer_name}</span><br><span style="font-size:12px;color:#555">${inv.account_number}</span></div>
+    <div class="box"><label>Category</label><span style="text-transform:capitalize">${inv.category}</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th><th>Amount (USD)</th></tr></thead>
+    <tbody>
+      <tr><td>${inv.category.charAt(0).toUpperCase()+inv.category.slice(1)} Charges</td><td>$${Number(inv.amount).toFixed(2)}</td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="total-row"><td>Total Billed</td><td>$${Number(inv.amount).toFixed(2)}</td></tr>
+      <tr class="total-row"><td>Amount Paid</td><td style="color:#27ae60">$${Number(inv.amount_paid).toFixed(2)}</td></tr>
+      <tr class="total-row"><td>Balance Due</td><td style="color:${inv.balance > 0 ? '#e74c3c' : '#27ae60'}">$${Number(inv.balance).toFixed(2)}</td></tr>
+    </tfoot>
+  </table>
+  ${inv.notes ? `<p style="font-size:12px;color:#555;margin-bottom:16px"><strong>Notes:</strong> ${inv.notes}</p>` : ''}
+  <div class="footer">City of Harare FMS &nbsp;|&nbsp; Printed: ${new Date().toLocaleString('en-GB')} &nbsp;|&nbsp; Confidential</div>
+  <div class="no-print" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 28px;background:#1f3864;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">Print Invoice</button>
+  </div>
+  </body></html>`);
+  w.document.close();
+}
+
+async function printStatement(ratepayerId) {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API}/api/ratepayers/${ratepayerId}/statement`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { toast('Could not load statement', 'error'); return; }
+    const html = await res.text();
+    const w = window.open('', '_blank', 'width=800,height=900');
+    w.document.write(html);
+    w.document.close();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 loadInvoices();

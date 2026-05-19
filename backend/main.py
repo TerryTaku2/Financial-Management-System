@@ -15,7 +15,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
@@ -878,6 +878,14 @@ def list_invoices(status: Optional[str] = None, category: Optional[str] = None,
         q = q.filter(Invoice.category == category)
     if anomaly and anomaly != "none": q = q.filter(Invoice.anomaly_flag == anomaly)
     if ratepayer_id: q = q.filter(Invoice.ratepayer_id == ratepayer_id)
+    if search:
+        if len(search) > 100:
+            raise HTTPException(400, "Search term too long")
+        term = f"%{search}%"
+        rp_ids = [r[0] for r in db.query(Ratepayer.id).filter(
+            or_(Ratepayer.full_name.ilike(term), Ratepayer.account_number.ilike(term))
+        ).all()]
+        q = q.filter(Invoice.ratepayer_id.in_(rp_ids))
     total = q.count()
     items = q.order_by(desc(Invoice.issue_date)).offset(skip).limit(limit).all()
     result = []
@@ -959,11 +967,20 @@ def delete_invoice(inv_id: int, db: Session = Depends(get_db),
 
 @app.get("/api/payments")
 def list_payments(reconciled: Optional[bool] = None, ratepayer_id: Optional[int] = None,
+                  search: Optional[str] = None,
                   skip: int = 0, limit: int = 50,
                   db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     q = db.query(Payment)
     if reconciled is not None: q = q.filter(Payment.is_reconciled == reconciled)
     if ratepayer_id:           q = q.filter(Payment.ratepayer_id == ratepayer_id)
+    if search:
+        if len(search) > 100:
+            raise HTTPException(400, "Search term too long")
+        term = f"%{search}%"
+        rp_ids = [r[0] for r in db.query(Ratepayer.id).filter(
+            or_(Ratepayer.full_name.ilike(term), Ratepayer.account_number.ilike(term))
+        ).all()]
+        q = q.filter(Payment.ratepayer_id.in_(rp_ids))
     total = q.count()
     items = q.order_by(desc(Payment.payment_date)).offset(skip).limit(limit).all()
     result = []

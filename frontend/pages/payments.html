@@ -27,6 +27,7 @@
       </div>
       <div class="card">
         <div class="filter-bar">
+          <input type="text" id="searchInput" placeholder="🔍  Search ratepayer name or account..." style="min-width:240px" oninput="debounceLoad()">
           <select id="reconFilter" onchange="loadPayments()">
             <option value="">All Payments</option>
             <option value="false">Unreconciled</option>
@@ -110,13 +111,21 @@ function openAddModal() {
   }
 })();
 
+let _debounceTimer = null;
+function debounceLoad() {
+  clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(() => loadPayments(1), 350);
+}
+
 async function loadPayments(page = 1) {
   currentPage = page;
-  const recon = document.getElementById('reconFilter').value;
-  const skip  = (page-1)*30;
+  const recon  = document.getElementById('reconFilter').value;
+  const search = document.getElementById('searchInput').value.trim();
+  const skip   = (page-1)*30;
   try {
     let url = `/api/payments?skip=${skip}&limit=30`;
     if (recon !== '') url += `&reconciled=${recon}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
     if (window._filterRatepayerId) url += `&ratepayer_id=${window._filterRatepayerId}`;
     const data = await apiFetch(url);
     document.getElementById('countBadge').textContent = `${data.total} payments`;
@@ -139,6 +148,8 @@ async function loadPayments(page = 1) {
         <td>${p.is_reconciled ? '<span class="badge badge-paid">Yes</span>' : '<span class="badge badge-overdue">No</span>'}</td>
         <td>${anomalyBadge(p.anomaly_flag)}</td>
         <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-secondary" onclick="printReceipt(${JSON.stringify(p).replace(/"/g,'&quot;')})">🖨 Receipt</button>
+          <button class="btn btn-sm btn-secondary" onclick="printStatement(${p.ratepayer_id})">Statement</button>
           ${!p.is_reconciled ? `<button class="btn btn-sm btn-secondary" onclick="reconcile(${p.id})">Reconcile</button>` : ''}
           ${canDelete && !p.is_reconciled ? `<button class="btn btn-sm btn-danger" onclick="deletePayment(${p.id},'${p.receipt_number}')">Delete</button>` : ''}
         </td>
@@ -187,6 +198,69 @@ async function recordPayment() {
     toast(`Receipt ${res.receipt_number} issued for ${rp.full_name}`, 'success');
     closeModal('addModal');
     loadPayments();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function printReceipt(p) {
+  const w = window.open('', '_blank', 'width=640,height=800');
+  const methodLabel = {cash:'Cash',ecocash:'EcoCash',bank_transfer:'Bank Transfer',rtgs:'RTGS',zipit:'Zipit'}[p.payment_method] || p.payment_method;
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Receipt ${p.receipt_number}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#222;background:#fff;padding:32px;max-width:560px;margin:0 auto}
+    .header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #1f3864;padding-bottom:14px;margin-bottom:20px}
+    .header img{width:52px;height:52px;object-fit:contain}
+    .header-text h1{font-size:18px;color:#1f3864;font-weight:700}
+    .header-text p{font-size:11px;color:#555;margin-top:2px}
+    .rcpt-title{font-size:22px;font-weight:700;color:#1f3864;margin-bottom:4px}
+    .rcpt-sub{font-size:12px;color:#555;margin-bottom:20px}
+    .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:13px}
+    .row:last-child{border-bottom:none}
+    .row .label{color:#666}
+    .row .value{font-weight:600}
+    .amount-box{background:#eef7f0;border:2px solid #27ae60;border-radius:8px;padding:14px;text-align:center;margin:20px 0}
+    .amount-box .amt{font-size:32px;font-weight:700;color:#27ae60}
+    .amount-box .cur{font-size:13px;color:#555;margin-top:2px}
+    .recon-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;color:#fff;background:${p.is_reconciled ? '#27ae60' : '#e67e22'}}
+    .footer{margin-top:24px;border-top:1px solid #dde;padding-top:12px;font-size:10px;color:#999;text-align:center}
+    @media print{body{padding:12px}.no-print{display:none}}
+  </style></head><body>
+  <div class="header">
+    <img src="/static/images/crest.png" alt="Crest" onerror="this.style.display='none'">
+    <div class="header-text"><h1>City of Harare</h1><p>Official Payment Receipt</p></div>
+  </div>
+  <div class="rcpt-title">${p.receipt_number}</div>
+  <div class="rcpt-sub">Payment Date: ${p.payment_date}</div>
+  <div class="amount-box">
+    <div class="amt">${p.currency} ${Number(p.amount).toFixed(2)}</div>
+    <div class="cur">Amount Received</div>
+  </div>
+  <div class="row"><span class="label">Received From</span><span class="value">${p.ratepayer_name}</span></div>
+  <div class="row"><span class="label">Account Number</span><span class="value">${p.account_number}</span></div>
+  <div class="row"><span class="label">Payment Method</span><span class="value">${methodLabel}</span></div>
+  <div class="row"><span class="label">Currency</span><span class="value">${p.currency}</span></div>
+  <div class="row"><span class="label">Reconciled</span><span class="value"><span class="recon-badge">${p.is_reconciled ? 'Yes' : 'Pending'}</span></span></div>
+  ${p.invoice_id ? `<div class="row"><span class="label">Invoice Reference</span><span class="value">#${p.invoice_id}</span></div>` : ''}
+  <div class="footer">City of Harare FMS &nbsp;|&nbsp; Printed: ${new Date().toLocaleString('en-GB')} &nbsp;|&nbsp; This is an official receipt. Retain for your records.</div>
+  <div class="no-print" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 28px;background:#1f3864;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">Print Receipt</button>
+  </div>
+  </body></html>`);
+  w.document.close();
+}
+
+async function printStatement(ratepayerId) {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API}/api/ratepayers/${ratepayerId}/statement`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { toast('Could not load statement', 'error'); return; }
+    const html = await res.text();
+    const w = window.open('', '_blank', 'width=800,height=900');
+    w.document.write(html);
+    w.document.close();
   } catch(e) { toast(e.message, 'error'); }
 }
 
