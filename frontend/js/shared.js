@@ -183,6 +183,41 @@ function buildSidebar(activePage) {
         </div>
         <button class="change-pwd-btn" onclick="openModal('changePwdModal')" title="Change Password">Change Password</button>
       </div>`;
+
+    // ── Mobile: inject hamburger + overlay ──────────────────────────────────
+    const topbar = document.querySelector('.topbar');
+    if (topbar && !topbar.querySelector('.sidebar-toggle')) {
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'sidebar-toggle';
+      toggleBtn.setAttribute('aria-label', 'Toggle navigation');
+      toggleBtn.innerHTML = '&#9776;';
+      topbar.insertBefore(toggleBtn, topbar.firstChild);
+      toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+      });
+    }
+
+    let overlay = document.getElementById('sidebar-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'sidebar-overlay';
+      overlay.id = 'sidebar-overlay';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+      });
+    }
+
+    sidebar.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('open');
+        }
+      });
+    });
     // Inject the change-password modal once into the page
     if (!document.getElementById('changePwdModal')) {
       const modalHtml = `

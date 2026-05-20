@@ -18,9 +18,29 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 0;
+  transition: width 0.22s ease;
+  position: relative;
 }
-.rpt-nav-section { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); padding: 8px 12px 3px; }
+.rpt-nav.collapsed { width: 32px; overflow-y: hidden; padding: 0; }
+.rpt-nav.collapsed .rpt-nav-section,
+.rpt-nav.collapsed .rpt-nav-item span:not(.ni),
+.rpt-nav.collapsed .rpt-nav-item .ni-label { display: none; }
+.rpt-nav.collapsed .rpt-nav-item { justify-content: center; padding: 6px 0; border-left: none; }
+.rpt-nav.collapsed .rpt-nav-item .ni { width: auto; }
+
+.rpt-nav-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; padding: 5px 0 8px;
+  background: none; border: none; border-bottom: 1px solid var(--border);
+  color: var(--text3); cursor: pointer; font-size: 11px;
+  transition: color 0.15s; flex-shrink: 0;
+}
+.rpt-nav-toggle:hover { color: var(--primary-light); }
+.rpt-nav.collapsed .rpt-nav-toggle { padding: 8px 0; border-bottom: 1px solid var(--border); }
+
+.rpt-nav-section { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); padding: 8px 12px 3px; white-space: nowrap; }
 .rpt-nav-item {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 12px;
@@ -30,10 +50,11 @@
   border-left: 2px solid transparent;
   transition: all .12s;
   font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
 }
 .rpt-nav-item:hover { background: var(--bg3); color: var(--text); }
 .rpt-nav-item.active { background: var(--primary-dim); color: var(--primary-light); border-left-color: var(--primary); font-weight: 500; }
-.rpt-nav-item .ni { width: 14px; text-align: center; font-size: 11px; }
+.rpt-nav-item .ni { width: 14px; text-align: center; font-size: 11px; flex-shrink: 0; }
 
 .rpt-content { flex: 1; overflow-y: auto; padding: 12px 16px; }
 
@@ -145,7 +166,7 @@
 .fc-net{font-size:10.5px;margin-top:3px;font-weight:600}
 
 /* ── COH Financial Report ──────────────────────────────── */
-.fr-wrap{background:#fff;color:#111;font-family:'DM Sans',sans-serif;font-size:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}
+.fr-wrap{background:#fff;color:#111;font-family:'DM Sans',sans-serif;font-size:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow-x:auto;overflow-y:hidden}
 .fr-doc-header{text-align:center;padding:12px 18px 8px;border-bottom:2px solid #1f3864}
 .fr-doc-header h2{font-family:'Crimson Pro',serif;font-size:17px;font-weight:700;color:#1f3864;margin:0;letter-spacing:.04em}
 .fr-doc-header h3{font-family:'Crimson Pro',serif;font-size:14px;font-weight:600;color:#1f3864;margin:2px 0 0}
@@ -202,32 +223,33 @@
 
     <div class="rpt-layout">
       <!-- ── Left nav ─────────────────────────────────── -->
-      <nav class="rpt-nav">
+      <nav class="rpt-nav" id="rptNav">
+        <button class="rpt-nav-toggle" id="rptNavToggle" onclick="toggleRptNav()" title="Collapse navigation">◀</button>
         <div class="rpt-nav-section">Overview</div>
-        <button class="rpt-nav-item active" data-panel="overview" onclick="showPanel('overview',this)"><span class="ni">📊</span>System Overview</button>
-        <button class="rpt-nav-item" data-panel="activity" onclick="showPanel('activity',this)"><span class="ni">⚡</span>Activity Feed</button>
+        <button class="rpt-nav-item active" title="System Overview" data-panel="overview" onclick="showPanel('overview',this)"><span class="ni">📊</span>System Overview</button>
+        <button class="rpt-nav-item" title="Activity Feed" data-panel="activity" onclick="showPanel('activity',this)"><span class="ni">⚡</span>Activity Feed</button>
 
         <div class="rpt-nav-section">Add New Data</div>
-        <button class="rpt-nav-item" data-panel="entry" onclick="showPanel('entry',this)"><span class="ni">✚</span>Data Entry</button>
+        <button class="rpt-nav-item" title="Data Entry" data-panel="entry" onclick="showPanel('entry',this)"><span class="ni">✚</span>Data Entry</button>
 
         <div class="rpt-nav-section">Revenue</div>
-        <button class="rpt-nav-item" data-panel="perf" onclick="showPanel('perf',this)"><span class="ni">🎯</span>Performance</button>
-        <button class="rpt-nav-item" data-panel="financial" onclick="showPanel('financial',this)"><span class="ni">💰</span>Financial Summary</button>
-        <button class="rpt-nav-item" data-panel="trend" onclick="showPanel('trend',this)"><span class="ni">📈</span>Collection Trend</button>
-        <button class="rpt-nav-item" data-panel="officer" onclick="showPanel('officer',this)"><span class="ni">👤</span>Officer Performance</button>
+        <button class="rpt-nav-item" title="Performance" data-panel="perf" onclick="showPanel('perf',this)"><span class="ni">🎯</span>Performance</button>
+        <button class="rpt-nav-item" title="Financial Summary" data-panel="financial" onclick="showPanel('financial',this)"><span class="ni">💰</span>Financial Summary</button>
+        <button class="rpt-nav-item" title="Collection Trend" data-panel="trend" onclick="showPanel('trend',this)"><span class="ni">📈</span>Collection Trend</button>
+        <button class="rpt-nav-item" title="Officer Performance" data-panel="officer" onclick="showPanel('officer',this)"><span class="ni">👤</span>Officer Performance</button>
 
         <div class="rpt-nav-section">Expenditure</div>
-        <button class="rpt-nav-item" data-panel="variance" onclick="showPanel('variance',this)"><span class="ni">📋</span>Budget Variance</button>
-        <button class="rpt-nav-item" data-panel="cashflow" onclick="showPanel('cashflow',this)"><span class="ni">🔄</span>Cashflow Forecast</button>
+        <button class="rpt-nav-item" title="Budget Variance" data-panel="variance" onclick="showPanel('variance',this)"><span class="ni">📋</span>Budget Variance</button>
+        <button class="rpt-nav-item" title="Cashflow Forecast" data-panel="cashflow" onclick="showPanel('cashflow',this)"><span class="ni">🔄</span>Cashflow Forecast</button>
 
         <div class="rpt-nav-section">Management</div>
-        <button class="rpt-nav-item" data-panel="mgmt" onclick="showPanel('mgmt',this)"><span class="ni">📈</span>Management Report</button>
-        <button class="rpt-nav-item" data-panel="coh"  onclick="showPanel('coh',this)"><span class="ni">📄</span>COH Financial</button>
+        <button class="rpt-nav-item" title="Management Report" data-panel="mgmt" onclick="showPanel('mgmt',this)"><span class="ni">📈</span>Management Report</button>
+        <button class="rpt-nav-item" title="COH Financial" data-panel="coh"  onclick="showPanel('coh',this)"><span class="ni">📄</span>COH Financial</button>
 
         <div class="rpt-nav-section">Settings</div>
-        <button class="rpt-nav-item" data-panel="budgets" onclick="showPanel('budgets',this)"><span class="ni">🏛</span>Budgets</button>
-        <button class="rpt-nav-item" data-panel="targets" onclick="showPanel('targets',this)"><span class="ni">🎯</span>Revenue Targets</button>
-        <button class="rpt-nav-item" data-panel="audit" onclick="showPanel('audit',this)"><span class="ni">🔍</span>Audit Trail</button>
+        <button class="rpt-nav-item" title="Budgets" data-panel="budgets" onclick="showPanel('budgets',this)"><span class="ni">🏛</span>Budgets</button>
+        <button class="rpt-nav-item" title="Revenue Targets" data-panel="targets" onclick="showPanel('targets',this)"><span class="ni">🎯</span>Revenue Targets</button>
+        <button class="rpt-nav-item" title="Audit Trail" data-panel="audit" onclick="showPanel('audit',this)"><span class="ni">🔍</span>Audit Trail</button>
       </nav>
 
       <!-- ── Right content ────────────────────────────── -->
@@ -993,7 +1015,7 @@
 
 <script src="../js/shared.js"></script>
 <script>
-requireAuth(); buildSidebar('reports');
+requireAuth(); buildSidebar('reports'); initRptNav();
 
 const user = getUser();
 const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
@@ -1002,6 +1024,25 @@ const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
 let charts = {};
 function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
 function mkChart(id, cfg) { destroyChart(id); charts[id] = new Chart(document.getElementById(id), cfg); return charts[id]; }
+
+// ── Nav collapse toggle ───────────────────────────────────────────────────────
+function toggleRptNav() {
+  const nav = document.getElementById('rptNav');
+  const btn = document.getElementById('rptNavToggle');
+  const collapsed = nav.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.title = collapsed ? 'Expand navigation' : 'Collapse navigation';
+  localStorage.setItem('rptNavCollapsed', collapsed ? '1' : '');
+}
+function initRptNav() {
+  if (localStorage.getItem('rptNavCollapsed') === '1') {
+    const nav = document.getElementById('rptNav');
+    const btn = document.getElementById('rptNavToggle');
+    nav.classList.add('collapsed');
+    btn.textContent = '▶';
+    btn.title = 'Expand navigation';
+  }
+}
 
 // ── Panel navigation ──────────────────────────────────────────────────────────
 function showPanel(name, btn) {
