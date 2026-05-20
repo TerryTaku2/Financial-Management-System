@@ -2,77 +2,137 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Budget — City of Harare FMS</title>
+<title>Budget & Expenditure — City of Harare FMS</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.tab-bar{display:flex;gap:4px;padding:0 0 0 2px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.tab-btn{background:none;border:none;padding:10px 20px;font-size:13.5px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--primary-light);border-bottom-color:var(--primary-light)}
+.tab-btn:hover:not(.active){color:var(--text1)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+.expand-btn{background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);padding:0 6px 0 0;line-height:1;vertical-align:middle;transition:color .15s}
+.expand-btn:hover{color:var(--primary-light)}
+.sec-sub-row{background:var(--bg2)}
+.sec-sub-row td{padding:0}
+.sec-inner{padding:12px 20px 16px 44px}
+.sec-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.sec-table th{color:var(--text3);font-weight:500;padding:4px 10px;border-bottom:1px solid var(--border);text-align:left}
+.sec-table td{padding:5px 10px;border-bottom:1px solid var(--border)}
+.sec-table tr:last-child td{border-bottom:none}
+</style>
 </head>
 <body>
 <div class="app-layout">
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
     <div class="topbar">
-      <span class="topbar-title">Budget Management</span>
-      <div class="topbar-right">
-        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import Budgets</button>
-        <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importBudgets(this)">
-        <button class="btn btn-secondary" onclick="downloadExport('/api/export/budgets?format=csv','budgets.csv')" id="btnExportCsv">⬇ CSV</button>
-        <button class="btn btn-secondary" onclick="downloadExport('/api/export/budgets?format=xlsx','budgets.xlsx')" id="btnExportXlsx">⬇ Excel</button>
-        <button class="btn btn-secondary" onclick="downloadExport('/api/templates/budgets?format=xlsx','template_budgets.xlsx')">📋 Template</button>
-        <button class="btn btn-secondary" onclick="exportTablePDF('Budget Register','budgetTable','budgets.pdf')">⬇ PDF</button>
-        <button class="btn btn-secondary" onclick="navigateTo('aging.html',{})">⏳ Creditor Aging</button>
-        <button class="btn btn-primary" id="btnAddBudget" onclick="openAddModal()" style="display:none">+ Add Budget</button>
-      </div>
+      <span class="topbar-title">Budget &amp; Expenditure</span>
+      <div class="topbar-right" id="topbarActions"></div>
     </div>
     <div class="page-content">
-      <!-- Data source notice -->
-      <div style="background:rgba(59,125,216,0.08);border:1px solid rgba(59,125,216,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text2);line-height:1.6">
-        <strong style="color:var(--primary-light)">Data source — COH 2024/2025 Consolidated Budget Report.</strong>
-        Allocated and Spent figures are drawn from the City of Harare's official budget document
-        (converted from ZiG at 1 USD = 1,000 ZiG, RBZ 2024 mid-year rate). Utilisation above 100%
-        reflects mid-year supplementary budgets and grant funding approved by Council — not system
-        data-entry errors. The Expenditure module records individual transaction receipts and is a
-        subset of the total departmental spend shown here.
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab-btn" id="tab-budget"      onclick="switchTab('budget')">Budget</button>
+        <button class="tab-btn" id="tab-expenditures" onclick="switchTab('expenditures')">Expenditures</button>
       </div>
-      <div class="grid-2 mb-4">
-        <div class="card">
-          <div class="card-header"><span class="card-title">Budget Utilisation by Department</span></div>
-          <canvas id="budgetChart" height="240"></canvas>
+
+      <!-- ── Budget tab ──────────────────────────────────────────── -->
+      <div class="tab-pane" id="pane-budget">
+        <div style="background:rgba(59,125,216,0.08);border:1px solid rgba(59,125,216,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text2);line-height:1.6">
+          <strong style="color:var(--primary-light)">Data source — COH 2024/2025 Consolidated Budget Report.</strong>
+          Allocated and Spent figures are drawn from the City of Harare's official budget document
+          (converted from ZiG at 1 USD = 1,000 ZiG, RBZ 2024 mid-year rate). Utilisation above 100%
+          reflects mid-year supplementary budgets and grant funding approved by Council — not system
+          data-entry errors. The Expenditure tab records individual transaction receipts and is a
+          subset of the total departmental spend shown here.
+        </div>
+        <div class="grid-2 mb-4">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Budget Utilisation by Department</span></div>
+            <canvas id="budgetChart" height="240"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Allocation vs Spent</span></div>
+            <canvas id="budgetPie" height="240"></canvas>
+          </div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Allocation vs Spent</span></div>
-          <canvas id="budgetPie" height="240"></canvas>
+          <div class="card-header"><span class="card-title">Department Budgets</span>
+            <span style="font-size:12px;color:var(--text3);font-weight:400;margin-left:8px">Click ▶ on a row to expand section allocations</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Department</th><th>Fiscal Year</th><th>Category</th>
+                <th>Allocated</th><th>Spent</th><th>Remaining</th>
+                <th>Utilisation</th><th>Status</th><th id="actionsHdr">Actions</th>
+              </tr></thead>
+              <tbody id="budgetTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-header"><span class="card-title">Department Budgets</span></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Department</th><th>Fiscal Year</th><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Utilisation</th><th>Status</th><th id="actionsHdr">Actions</th></tr></thead>
-            <tbody id="budgetTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
-          </table>
+
+      <!-- ── Expenditures tab ────────────────────────────────────── -->
+      <div class="tab-pane" id="pane-expenditures">
+        <div class="card">
+          <div class="filter-bar">
+            <select id="expDeptFilter" onchange="loadExp()">
+              <option value="">All Depts / Programmes</option>
+              <option value="Town Clerk Department">Town Clerk Department</option>
+              <option value="Chamber Secretary">Chamber Secretary</option>
+              <option value="Harare Water Department">Harare Water Department</option>
+              <option value="City Health Department">City Health Department</option>
+              <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+              <option value="Department of Works">Department of Works</option>
+              <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+              <option value="Urban Planning Department">Urban Planning Department</option>
+              <option value="Finance Department">Finance Department</option>
+            </select>
+            <span id="expCountBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Reference</th><th>Dept / Programme</th><th>Description</th>
+                <th>Amount</th><th>Budget Line</th><th>Date</th><th>Approved</th><th>Anomaly</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="expTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
 
-<!-- Add / Edit Budget Modal -->
-<div class="modal-overlay" id="addModal">
+<!-- ── Budget Add/Edit Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="budgetModal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title" id="modalTitle">Add Budget Entry</span>
-      <button class="modal-close" onclick="closeModal('addModal')">×</button>
+      <span class="modal-title" id="budgetModalTitle">Add Budget Entry</span>
+      <button class="modal-close" onclick="closeModal('budgetModal')">×</button>
     </div>
-    <input type="hidden" id="f_editId">
+    <input type="hidden" id="b_editId">
     <div class="grid-2">
       <div class="form-group"><label>Fiscal Year</label><input id="f_fy" placeholder="e.g. 2025/2026"></div>
       <div class="form-group"><label>Category</label><input id="f_cat" placeholder="e.g. Operations"></div>
     </div>
     <div class="form-group"><label>Department</label>
-      <select id="f_dept">
-        <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
-        <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
+      <select id="b_dept">
+        <option value="Town Clerk Department">Town Clerk Department</option>
+        <option value="Chamber Secretary">Chamber Secretary</option>
+        <option value="Harare Water Department">Harare Water Department</option>
+        <option value="City Health Department">City Health Department</option>
+        <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+        <option value="Department of Works">Department of Works</option>
+        <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+        <option value="Urban Planning Department">Urban Planning Department</option>
+        <option value="Finance Department">Finance Department</option>
       </select>
     </div>
     <div class="grid-2">
@@ -80,8 +140,75 @@
       <div class="form-group" id="spentGroup"><label>Spent Amount (USD) <span id="spentNote" style="font-size:10px;color:var(--text3);font-weight:400"></span></label><input id="f_spent" type="number" step="0.01" placeholder="0.00" value="0"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
-      <button class="btn btn-primary" id="saveBtn" onclick="saveBudget()">Save</button>
+      <button class="btn btn-secondary" onclick="closeModal('budgetModal')">Cancel</button>
+      <button class="btn btn-primary" id="budgetSaveBtn" onclick="saveBudget()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Section Management Modal ───────────────────────────────────────── -->
+<div class="modal-overlay" id="sectionModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <span class="modal-title" id="secModalTitle">Section Allocations</span>
+      <button class="modal-close" onclick="closeModal('sectionModal')">×</button>
+    </div>
+    <input type="hidden" id="sm_budgetId">
+    <input type="hidden" id="sm_editSectionId">
+    <div id="sm_summary" style="background:var(--bg2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px"></div>
+    <div id="sm_sectionsWrap"></div>
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px" id="sm_formTitle">Add Section</div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Section Name</label>
+          <select id="sm_sectionSelect" style="display:none"></select>
+          <input id="sm_sectionInput" placeholder="Section name">
+        </div>
+        <div class="form-group">
+          <label>Allocated Amount (USD)</label>
+          <input id="sm_alloc" type="number" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div id="sm_validation" style="color:var(--danger);font-size:12px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="sm_saveBtn" onclick="saveSection()">Add Section</button>
+        <button class="btn btn-secondary" id="sm_cancelEdit" onclick="cancelSectionEdit()" style="display:none">Cancel Edit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Expenditure Create/Edit Modal ──────────────────────────────────── -->
+<div class="modal-overlay" id="expModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="expModalTitle">Record Expenditure</span>
+      <button class="modal-close" onclick="closeModal('expModal')">×</button>
+    </div>
+    <input type="hidden" id="e_editId">
+    <div class="form-group"><label>Department</label>
+      <select id="e_dept">
+        <option value="Town Clerk Department">Town Clerk Department</option>
+        <option value="Chamber Secretary">Chamber Secretary</option>
+        <option value="Harare Water Department">Harare Water Department</option>
+        <option value="City Health Department">City Health Department</option>
+        <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+        <option value="Department of Works">Department of Works</option>
+        <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+        <option value="Urban Planning Department">Urban Planning Department</option>
+        <option value="Finance Department">Finance Department</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Description</label><textarea id="e_desc" rows="2" placeholder="Describe the expenditure..."></textarea></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Amount (USD)</label><input id="e_amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Expenditure Date</label><input id="e_expdate" type="date"></div>
+    </div>
+    <div class="form-group"><label>Budget Line</label><input id="e_bl" placeholder="e.g. BL-202"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('expModal')">Cancel</button>
+      <button class="btn btn-primary" id="expSaveBtn" onclick="saveExp()">Submit</button>
     </div>
   </div>
 </div>
@@ -90,66 +217,131 @@
 <script>
 requireAuth(); buildSidebar('budget');
 const user = getUser();
-const canManage = ['admin','budget_officer','accountant'].includes(user?.role);
+const canManage  = ['admin','budget_officer','accountant'].includes(user?.role);
+const canApprove = ['admin','accountant'].includes(user?.role);
+const canDelete  = ['admin','accountant'].includes(user?.role);
+
+/* ── Tab switching ──────────────────────────────────────────────────────── */
+
+let _activeTab = 'budget';
+
+function switchTab(tab) {
+  _activeTab = tab;
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  renderTopbarActions(tab);
+  setUrlParam('tab', tab === 'budget' ? null : tab);
+}
+
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'budget') {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import Budgets</button>
+      <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importBudgets(this)">
+      <button class="btn btn-secondary" id="btnExportCsv">⬇ CSV</button>
+      <button class="btn btn-secondary" id="btnExportXlsx">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/templates/budgets?format=xlsx','template_budgets.xlsx')">📋 Template</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Budget Register','budgetTable','budgets.pdf')">⬇ PDF</button>
+      <button class="btn btn-secondary" onclick="navigateTo('analytics.html',{})">⏳ Creditor Aging</button>
+      <button class="btn btn-secondary" onclick="navigateTo('financial_report.html',{})">📊 Financial Report</button>
+      ${['admin','budget_officer'].includes(user?.role) ? '<button class="btn btn-secondary" id="btnSeedData" onclick="loadDemoData()" title="Seed 9 COH department budgets with sections for 2025/2026">📥 Load Demo Data</button>' : ''}
+      ${canManage ? '<button class="btn btn-primary" id="btnAddBudget" onclick="openAddBudgetModal()">+ Add Budget</button>' : ''}
+    `;
+    document.getElementById('btnExportCsv').onclick  = canManage
+      ? () => downloadExport('/api/reports/financial-summary?format=csv','financial_summary.csv')
+      : () => downloadExport('/api/export/budgets?format=csv','budgets.csv');
+    document.getElementById('btnExportXlsx').onclick = canManage
+      ? () => downloadExport('/api/reports/financial-summary?format=xlsx','financial_summary.xlsx')
+      : () => downloadExport('/api/export/budgets?format=xlsx','budgets.xlsx');
+  } else {
+    const dept = document.getElementById('expDeptFilter')?.value || '';
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/expenditures?format=csv','expenditures.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/expenditures?format=xlsx','expenditures.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Expenditure Register','expTable','expenditures.pdf')">⬇ PDF</button>
+      <button class="btn btn-secondary" onclick="goToAging()">⏳ Creditor Aging</button>
+      <button class="btn btn-primary" onclick="openAddExpModal()">+ Record Expenditure</button>
+    `;
+  }
+}
+
+/* ── Budget: pre-defined sections ──────────────────────────────────────── */
+
+const DEPT_SECTIONS = {
+  "Town Clerk Department": [
+    "Information Communication and Technology",
+    "Harare Metropolitan Police",
+    "Corporate Communications",
+    "Supply Chain",
+    "Monitoring & Evaluations",
+    "District Administration"
+  ],
+  "Chamber Secretary": [
+    "Corporate Services",
+    "Administration",
+    "Legal Services",
+    "Emergency",
+    "Public Affairs",
+    "International Affairs"
+  ],
+  "Finance Department": [
+    "Revenue Collection",
+    "Budget",
+    "Central Accounting"
+  ]
+};
 
 let barChart = null, pieChart = null;
+let budgetData = [];
+let currentSectionBudget = null;
 
-if (canManage) {
-  document.getElementById('btnAddBudget').style.display = '';
-  document.getElementById('btnExportCsv').onclick  = () => downloadExport('/api/reports/financial-summary?format=csv','financial_summary.csv');
-  document.getElementById('btnExportXlsx').onclick = () => downloadExport('/api/reports/financial-summary?format=xlsx','financial_summary.xlsx');
-}
+/* ── Budget modal ───────────────────────────────────────────────────────── */
 
-function openAddModal() {
-  document.getElementById('f_editId').value = '';
-  document.getElementById('modalTitle').textContent = 'Add Budget Entry';
-  document.getElementById('saveBtn').textContent = 'Create';
+function openAddBudgetModal() {
+  document.getElementById('b_editId').value = '';
+  document.getElementById('budgetModalTitle').textContent = 'Add Budget Entry';
+  document.getElementById('budgetSaveBtn').textContent = 'Create';
   ['f_fy','f_cat','f_alloc'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f_dept').value  = 'Finance';
-  // Spent is always 0 on creation — derived from approved expenditure records, not manual entry.
+  document.getElementById('b_dept').value = 'Town Clerk Department';
   const spentEl = document.getElementById('f_spent');
-  spentEl.value    = '0';
-  spentEl.readOnly = true;
-  spentEl.style.opacity = '0.45';
+  spentEl.value = '0'; spentEl.readOnly = true; spentEl.style.opacity = '0.45';
   document.getElementById('spentNote').textContent = '— auto-calculated from approved expenditures';
-  openModal('addModal');
+  openModal('budgetModal');
 }
 
-function openEditModal(b) {
-  document.getElementById('f_editId').value = b.id;
-  document.getElementById('modalTitle').textContent = 'Edit Budget Entry';
-  document.getElementById('saveBtn').textContent = 'Save Changes';
+function openEditBudgetModal(id) {
+  const b = budgetData.find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('b_editId').value = b.id;
+  document.getElementById('budgetModalTitle').textContent = 'Edit Budget Entry';
+  document.getElementById('budgetSaveBtn').textContent = 'Save Changes';
   document.getElementById('f_fy').value    = b.fiscal_year;
-  document.getElementById('f_dept').value  = b.department;
+  document.getElementById('b_dept').value  = b.department;
   document.getElementById('f_cat').value   = b.category;
   document.getElementById('f_alloc').value = b.allocated;
   const spentEl = document.getElementById('f_spent');
-  spentEl.value    = b.spent;
-  spentEl.readOnly = false;
-  spentEl.style.opacity = '1';
+  spentEl.value = b.spent; spentEl.readOnly = false; spentEl.style.opacity = '1';
   document.getElementById('spentNote').textContent = '— editable on existing entries';
-  openModal('addModal');
+  openModal('budgetModal');
 }
 
 async function saveBudget() {
-  const editId = document.getElementById('f_editId').value;
+  const editId = document.getElementById('b_editId').value;
   const data = {
     fiscal_year:      document.getElementById('f_fy').value.trim(),
-    department:       document.getElementById('f_dept').value,
+    department:       document.getElementById('b_dept').value,
     category:         document.getElementById('f_cat').value.trim(),
     allocated_amount: parseFloat(document.getElementById('f_alloc').value) || 0,
     spent_amount:     parseFloat(document.getElementById('f_spent').value) || 0,
   };
   if (!data.fiscal_year || !data.allocated_amount) { toast('Fiscal year and allocated amount required','warning'); return; }
   try {
-    if (editId) {
-      await apiPut(`/api/budgets/${editId}`, data);
-      toast('Budget updated','success');
-    } else {
-      await apiPost('/api/budgets', data);
-      toast('Budget created','success');
-    }
-    closeModal('addModal');
+    if (editId) { await apiPut(`/api/budgets/${editId}`, data); toast('Budget updated','success'); }
+    else        { await apiPost('/api/budgets', data);          toast('Budget created','success'); }
+    closeModal('budgetModal');
     loadBudget();
   } catch(e) { toast(e.message,'error'); }
 }
@@ -161,23 +353,227 @@ async function deleteBudget(id, dept, fy) {
   });
 }
 
+async function loadDemoData() {
+  if (!confirm('This will add the 9 COH department budgets (2025/2026) with their sections. Existing entries are skipped. Continue?')) return;
+  try {
+    const res = await apiPost('/api/admin/seed-demo-budgets', {});
+    toast(res.message, 'success');
+    loadBudget();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+/* ── Expand/collapse section sub-rows ───────────────────────────────────── */
+
+function toggleSections(id) {
+  const row = document.getElementById(`sec-row-${id}`);
+  const btn = document.getElementById(`expbtn-${id}`);
+  if (!row) return;
+  const opening = row.style.display === 'none' || !row.style.display;
+  row.style.display = opening ? '' : 'none';
+  btn.textContent   = opening ? '▼' : '▶';
+}
+
+/* ── Section modal ───────────────────────────────────────────────────────── */
+
+function openSectionModal(id) {
+  const b = budgetData.find(x => x.id === id);
+  if (!b) return;
+  currentSectionBudget = b;
+  document.getElementById('sm_budgetId').value       = b.id;
+  document.getElementById('sm_editSectionId').value  = '';
+  document.getElementById('sm_formTitle').textContent   = 'Add Section';
+  document.getElementById('sm_saveBtn').textContent     = 'Add Section';
+  document.getElementById('sm_cancelEdit').style.display = 'none';
+  document.getElementById('sm_alloc').value          = '';
+  document.getElementById('sm_validation').textContent  = '';
+  document.getElementById('secModalTitle').textContent  = `Sections — ${b.department}`;
+  setupSectionNameUI(b.department, b.sections || [], null);
+  renderSectionSummary(b);
+  renderSectionsList(b);
+  openModal('sectionModal');
+}
+
+function setupSectionNameUI(dept, existingSections, editingId) {
+  const predefined = DEPT_SECTIONS[dept];
+  const sel = document.getElementById('sm_sectionSelect');
+  const inp = document.getElementById('sm_sectionInput');
+  if (predefined && predefined.length > 0) {
+    const usedNames = existingSections
+      .filter(s => s.id !== editingId)
+      .map(s => s.section_name);
+    const available = predefined.filter(s => !usedNames.includes(s));
+    sel.innerHTML = available.length
+      ? available.map(s => `<option value="${s}">${s}</option>`).join('')
+      : '<option value="">All sections already added</option>';
+    sel.style.display = ''; inp.style.display = 'none';
+  } else {
+    sel.style.display = 'none'; inp.style.display = '';
+    inp.value = '';
+  }
+}
+
+function renderSectionSummary(b) {
+  const sections     = b.sections || [];
+  const secAllocated = sections.reduce((s, x) => s + x.allocated, 0);
+  const secRemaining = b.allocated - secAllocated;
+  const pct          = b.allocated > 0 ? Math.min(100, secAllocated / b.allocated * 100) : 0;
+  const barColor     = secAllocated > b.allocated ? 'var(--danger)' : pct >= 100 ? 'var(--success)' : 'var(--primary-light)';
+  document.getElementById('sm_summary').innerHTML = `
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px">
+      <span>Department Budget: <b>${fmtMoney(b.allocated)}</b></span>
+      <span>Sections Allocated: <b style="color:${secAllocated > b.allocated ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(secAllocated)}</b></span>
+      <span>Unallocated: <b style="color:${secRemaining < 0 ? 'var(--danger)' : 'var(--text1)'}">${fmtMoney(secRemaining)}</b></span>
+    </div>
+    <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${barColor};border-radius:4px;transition:width .3s"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">${pct.toFixed(1)}% of department budget allocated to sections</div>`;
+}
+
+function renderSectionsList(b) {
+  const sections = b.sections || [];
+  const wrap = document.getElementById('sm_sectionsWrap');
+  if (!sections.length) {
+    wrap.innerHTML = '<p style="color:var(--text3);font-size:13px;margin:0 0 4px">No sections yet. Use the form below to add section allocations.</p>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="sec-table" style="margin-bottom:4px">
+      <thead><tr>
+        <th>Section</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Util%</th>
+        ${canManage ? '<th></th>' : ''}
+      </tr></thead>
+      <tbody>
+        ${sections.map(s => {
+          const pct = s.utilisation;
+          const pc  = pct > 100 ? 'var(--danger)' : pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+          return `<tr>
+            <td style="font-weight:500">${s.section_name}</td>
+            <td>${fmtMoney(s.allocated)}</td>
+            <td class="text-warning">${fmtMoney(s.spent)}</td>
+            <td class="${s.remaining < 0 ? 'text-danger' : 'text-success'}">${fmtMoney(s.remaining)}</td>
+            <td style="color:${pc}">${pct}%</td>
+            ${canManage ? `<td style="white-space:nowrap">
+              <button class="btn btn-sm btn-secondary" onclick="editSection(${s.id})">Edit</button>
+              <button class="btn btn-sm btn-danger"    onclick="deleteSection(${s.id})">Delete</button>
+            </td>` : ''}
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function editSection(sectionId) {
+  const s = currentSectionBudget.sections.find(x => x.id === sectionId);
+  if (!s) return;
+  document.getElementById('sm_editSectionId').value  = sectionId;
+  document.getElementById('sm_formTitle').textContent   = `Edit — ${s.section_name}`;
+  document.getElementById('sm_saveBtn').textContent     = 'Save Changes';
+  document.getElementById('sm_cancelEdit').style.display = '';
+  document.getElementById('sm_alloc').value = s.allocated;
+  document.getElementById('sm_validation').textContent  = '';
+  const predefined = DEPT_SECTIONS[currentSectionBudget.department];
+  const sel = document.getElementById('sm_sectionSelect');
+  const inp = document.getElementById('sm_sectionInput');
+  if (predefined && predefined.length > 0) {
+    sel.innerHTML = predefined.map(p => `<option value="${p}"${p === s.section_name ? ' selected' : ''}>${p}</option>`).join('');
+    sel.style.display = ''; inp.style.display = 'none';
+  } else {
+    sel.style.display = 'none'; inp.style.display = '';
+    inp.value = s.section_name;
+  }
+}
+
+function cancelSectionEdit() {
+  document.getElementById('sm_editSectionId').value = '';
+  document.getElementById('sm_formTitle').textContent   = 'Add Section';
+  document.getElementById('sm_saveBtn').textContent     = 'Add Section';
+  document.getElementById('sm_cancelEdit').style.display = 'none';
+  document.getElementById('sm_alloc').value = '';
+  document.getElementById('sm_validation').textContent  = '';
+  setupSectionNameUI(currentSectionBudget.department, currentSectionBudget.sections || [], null);
+}
+
+async function saveSection() {
+  const budgetId      = parseInt(document.getElementById('sm_budgetId').value);
+  const editSectionId = document.getElementById('sm_editSectionId').value;
+  const predefined    = DEPT_SECTIONS[currentSectionBudget.department];
+  const sectionName   = predefined && predefined.length > 0
+    ? document.getElementById('sm_sectionSelect').value.trim()
+    : document.getElementById('sm_sectionInput').value.trim();
+  const allocated  = parseFloat(document.getElementById('sm_alloc').value) || 0;
+  const validEl    = document.getElementById('sm_validation');
+
+  if (!sectionName) { validEl.textContent = 'Section name is required.'; return; }
+  if (allocated <= 0) { validEl.textContent = 'Allocated amount must be greater than 0.'; return; }
+
+  const sections   = currentSectionBudget.sections || [];
+  const editId     = editSectionId ? parseInt(editSectionId) : 0;
+  const otherTotal = sections.filter(s => s.id !== editId).reduce((sum, s) => sum + s.allocated, 0);
+  if (otherTotal + allocated > currentSectionBudget.allocated) {
+    const avail = currentSectionBudget.allocated - otherTotal;
+    validEl.textContent = `Exceeds department budget. Available: ${fmtMoney(avail)}`;
+    return;
+  }
+  validEl.textContent = '';
+
+  try {
+    if (editSectionId) {
+      await apiPut(`/api/budget-sections/${editSectionId}`, { section_name: sectionName, allocated_amount: allocated });
+      toast('Section updated', 'success');
+    } else {
+      await apiPost(`/api/budgets/${budgetId}/sections`, { section_name: sectionName, allocated_amount: allocated });
+      toast('Section added', 'success');
+    }
+    await refreshAndReopenModal(budgetId);
+  } catch(e) { validEl.textContent = e.message; }
+}
+
+async function deleteSection(sectionId) {
+  await confirmDelete('Delete this section allocation? This cannot be undone.', async () => {
+    try {
+      await apiDelete(`/api/budget-sections/${sectionId}`);
+      toast('Section deleted', 'success');
+      await refreshAndReopenModal(currentSectionBudget.id);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function refreshAndReopenModal(budgetId) {
+  await loadBudget();
+  const fresh = budgetData.find(b => b.id === budgetId);
+  if (fresh) openSectionModal(fresh.id);
+}
+
+/* ── Budget table ────────────────────────────────────────────────────────── */
+
 async function loadBudget() {
   try {
     const data = await apiFetch('/api/budgets');
+    budgetData = data;
     const tbody = document.getElementById('budgetTable');
     if (!data.length) {
       tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No budget entries. Upload a file or add manually.</td></tr>';
       return;
     }
-    tbody.innerHTML = data.map(b => {
-      const pct = b.utilisation;
+
+    const rows = [];
+    data.forEach(b => {
+      const pct        = b.utilisation;
       const overBudget = pct > 100;
-      const statusCls = overBudget ? 'danger' : pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'paid';
-      const statusTxt = overBudget ? 'Supplementary' : pct >= 90 ? 'Critical' : pct >= 70 ? 'Watch' : 'On Track';
+      const statusCls  = overBudget ? 'danger' : pct >= 90 ? 'danger' : pct >= 70 ? 'warning' : 'paid';
+      const statusTxt  = overBudget ? 'Supplementary' : pct >= 90 ? 'Critical' : pct >= 70 ? 'Watch' : 'On Track';
       const pctDisplay = pct > 999 ? pct.toLocaleString() + '%' : pct + '%';
-      const pctTitle = overBudget ? `${pct}% — Mid-year supplementary budget or grant funding applied (COH 2024/2025 report)` : pct + '%';
-      return `<tr>
-        <td style="font-weight:500">${b.department}</td>
+      const pctTitle   = overBudget ? `${pct}% — Mid-year supplementary budget or grant funding applied` : pct + '%';
+      const sections   = b.sections || [];
+      const secCount   = sections.length;
+      const secAlloc   = sections.reduce((s, x) => s + x.allocated, 0);
+      const secPct     = b.allocated > 0 ? Math.min(100, secAlloc / b.allocated * 100) : 0;
+
+      rows.push(`<tr>
+        <td style="font-weight:500">
+          <button class="expand-btn" id="expbtn-${b.id}" onclick="toggleSections(${b.id})" title="Show/hide sections">▶</button>${b.department}
+        </td>
         <td style="color:var(--text2)">${b.fiscal_year}</td>
         <td style="color:var(--text2);font-size:12.5px">${b.category}</td>
         <td>${fmtMoney(b.allocated)}</td>
@@ -193,15 +589,66 @@ async function loadBudget() {
         </td>
         <td><span class="badge badge-${statusCls}" title="${pctTitle}">${statusTxt}</span></td>
         <td style="white-space:nowrap">
-          <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{department:b.department})}">Aging</a>
-          <a class="btn btn-sm btn-secondary" href="${pageUrl('expenditures.html',{department:b.department})}">Expenditures</a>
-          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openEditModal(${JSON.stringify(b).replace(/"/g,'&quot;')})">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteBudget(${b.id},'${b.department}','${b.fiscal_year}')">Delete</button>` : ''}
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('analytics.html',{department:b.department})}">Aging</a>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('budget.html',{tab:'expenditures',department:b.department})}">Expenditures</a>
+          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openEditBudgetModal(${b.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteBudget(${b.id},'${b.department.replace(/'/g,"\\'")}','${b.fiscal_year}')">Delete</button>` : ''}
+          <button class="btn btn-sm btn-secondary" onclick="openSectionModal(${b.id})" style="color:var(--primary-light)">
+            Sections${secCount > 0 ? ` (${secCount})` : ''}
+          </button>
         </td>
-      </tr>`;
-    }).join('');
+      </tr>`);
 
-    // Charts
+      let secContent;
+      if (secCount > 0) {
+        secContent = `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text2)">Sections: <b>${fmtMoney(secAlloc)}</b> of <b>${fmtMoney(b.allocated)}</b></span>
+            <div style="width:140px;background:var(--bg3);border-radius:3px;height:5px;overflow:hidden">
+              <div style="width:${secPct}%;height:100%;background:var(--primary-light);border-radius:3px"></div>
+            </div>
+            <span style="font-size:11px;color:var(--text3)">${secPct.toFixed(0)}%</span>
+            ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openSectionModal(${b.id})" style="margin-left:4px">+ Manage Sections</button>` : ''}
+          </div>
+          <table class="sec-table">
+            <thead><tr>
+              <th>Section</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Utilisation</th>
+            </tr></thead>
+            <tbody>
+              ${sections.map(s => {
+                const sp = s.utilisation;
+                const sc = sp > 100 ? 'var(--danger)' : sp >= 90 ? 'var(--danger)' : sp >= 70 ? 'var(--warning)' : 'var(--success)';
+                return `<tr>
+                  <td style="font-weight:500">${s.section_name}</td>
+                  <td>${fmtMoney(s.allocated)}</td>
+                  <td class="text-warning">${fmtMoney(s.spent)}</td>
+                  <td class="${s.remaining < 0 ? 'text-danger' : 'text-success'}">${fmtMoney(s.remaining)}</td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <div style="width:60px;background:var(--bg3);border-radius:3px;height:4px;overflow:hidden">
+                        <div style="width:${Math.min(sp,100)}%;height:100%;background:${sc};border-radius:3px"></div>
+                      </div>
+                      <span style="font-size:11px">${sp}%</span>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } else {
+        secContent = `<p style="color:var(--text3);font-size:12.5px;margin:0">
+          No sections allocated yet.
+          ${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openSectionModal(${b.id})" style="margin-left:8px">+ Add Sections</button>` : ''}
+        </p>`;
+      }
+
+      rows.push(`<tr id="sec-row-${b.id}" class="sec-sub-row" style="display:none">
+        <td colspan="9"><div class="sec-inner">${secContent}</div></td>
+      </tr>`);
+    });
+
+    tbody.innerHTML = rows.join('');
+
     if (barChart) { barChart.destroy(); barChart = null; }
     if (pieChart)  { pieChart.destroy();  pieChart = null; }
 
@@ -243,7 +690,114 @@ async function importBudgets(input) {
   input.value = '';
 }
 
-loadBudget();
+/* ── Expenditure functions ───────────────────────────────────────────────── */
+
+function goToAging() {
+  const dept = document.getElementById('expDeptFilter').value;
+  navigateTo('analytics.html', dept ? { department: dept } : {});
+}
+
+function openAddExpModal() {
+  document.getElementById('e_editId').value  = '';
+  document.getElementById('expModalTitle').textContent = 'Record Expenditure';
+  document.getElementById('expSaveBtn').textContent = 'Submit';
+  ['e_desc','e_amount','e_bl'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('e_dept').value    = 'Town Clerk Department';
+  document.getElementById('e_expdate').value = new Date().toISOString().slice(0, 10);
+  openModal('expModal');
+}
+
+function openEditExpModal(e) {
+  document.getElementById('e_editId').value  = e.id;
+  document.getElementById('expModalTitle').textContent = 'Edit Expenditure';
+  document.getElementById('expSaveBtn').textContent = 'Save Changes';
+  document.getElementById('e_dept').value    = e.department;
+  document.getElementById('e_desc').value    = e.description;
+  document.getElementById('e_amount').value  = e.amount;
+  document.getElementById('e_bl').value      = e.budget_line;
+  document.getElementById('e_expdate').value = e.date || new Date().toISOString().slice(0, 10);
+  openModal('expModal');
+}
+
+async function loadExp() {
+  const dept = document.getElementById('expDeptFilter').value;
+  try {
+    let url = '/api/expenditures?limit=200';
+    if (dept) url += `&department=${encodeURIComponent(dept)}`;
+    const data = await apiFetch(url);
+    const items = data.items || data;
+    document.getElementById('expCountBadge').textContent = `${data.total || items.length} expenditures`;
+    const tbody = document.getElementById('expTable');
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💸</div><p>No expenditures</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map(e => `<tr>
+      <td><code style="font-size:11.5px;color:var(--gold)">${e.reference_number}</code></td>
+      <td>${e.department}</td>
+      <td style="color:var(--text2);font-size:12.5px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.description}">${e.description}</td>
+      <td class="fw-bold">${fmtMoney(e.amount)}</td>
+      <td style="font-size:12px">${e.budget_line}</td>
+      <td style="font-size:12.5px;color:var(--text2)">${fmtDate(e.date)}</td>
+      <td>${e.is_approved ? '<span class="badge badge-paid">Approved</span>' : '<span class="badge badge-pending">Pending</span>'}</td>
+      <td>${anomalyBadge(e.anomaly_flag)}</td>
+      <td style="white-space:nowrap">
+        ${!e.is_approved && canApprove ? `<button class="btn btn-sm btn-primary" onclick="approveExp(${e.id})">Approve</button>` : ''}
+        ${!e.is_approved ? `<button class="btn btn-sm btn-secondary" onclick="openEditExpModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">Edit</button>` : ''}
+        <a class="btn btn-sm btn-secondary" href="${pageUrl('analytics.html',{department:e.department})}">Aging</a>
+        ${!e.is_approved && canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteExp(${e.id},'${e.reference_number}')">Delete</button>` : ''}
+      </td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function approveExp(id) {
+  try { await apiPatch(`/api/expenditures/${id}/approve`); toast('Expenditure approved','success'); loadExp(); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+async function deleteExp(id, ref) {
+  await confirmDelete(`Delete expenditure ${ref}? This cannot be undone.`, async () => {
+    try { await apiDelete(`/api/expenditures/${id}`); toast('Expenditure deleted','success'); loadExp(); }
+    catch(e) { toast(e.message,'error'); }
+  });
+}
+
+async function saveExp() {
+  const editId = document.getElementById('e_editId').value;
+  const data = {
+    department:        document.getElementById('e_dept').value,
+    description:       document.getElementById('e_desc').value,
+    amount:            parseFloat(document.getElementById('e_amount').value),
+    budget_line:       document.getElementById('e_bl').value,
+    expenditure_date:  document.getElementById('e_expdate').value || new Date().toISOString().slice(0, 10),
+  };
+  if (!data.description || !data.amount) { toast('Description and amount required','warning'); return; }
+  try {
+    if (editId) {
+      await apiPut(`/api/expenditures/${editId}`, data);
+      toast('Expenditure updated','success');
+    } else {
+      await apiPost('/api/expenditures', data);
+      toast('Expenditure recorded','success');
+    }
+    closeModal('expModal');
+    loadExp();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+
+(function init() {
+  const p = getUrlParams();
+  const tab = p.tab === 'expenditures' ? 'expenditures' : 'budget';
+  if (p.department && tab === 'expenditures') {
+    document.getElementById('expDeptFilter').value = p.department;
+  }
+  switchTab(tab);
+  loadBudget();
+  loadExp();
+})();
 </script>
 </body>
 </html>

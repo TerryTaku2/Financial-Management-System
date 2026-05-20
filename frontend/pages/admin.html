@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<style>
+.tab-bar{display:flex;gap:4px;padding:0 0 0 2px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.tab-btn{background:none;border:none;padding:10px 20px;font-size:13.5px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--primary-light);border-bottom-color:var(--primary-light)}
+.tab-btn:hover:not(.active){color:var(--text1)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* Exchange rates */
+.rate-card{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;max-width:600px}
+.rate-tile{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;position:relative;overflow:hidden}
+.rate-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.rate-tile.usd::before{background:var(--success)}
+.rate-tile.zwg::before{background:var(--warning)}
+.rate-tile.zig::before{background:var(--primary)}
+.rate-currency{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:4px}
+.rate-value{font-family:'Crimson Pro',serif;font-size:26px;font-weight:700;color:var(--text1);margin-bottom:2px}
+.rate-meta{font-size:11px;color:var(--text3)}
+.rate-badge{display:inline-block;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle}
+.rate-badge.manual{background:rgba(243,156,18,.15);color:var(--warning)}
+.rate-badge.auto{background:rgba(39,174,96,.15);color:var(--success)}
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar">
+      <span class="topbar-title">Administration</span>
+      <div class="topbar-right" id="topbarActions"></div>
+    </div>
+    <div class="page-content">
+
+      <div class="tab-bar">
+        <button class="tab-btn" id="tab-users"          onclick="switchTab('users')">User Management</button>
+        <button class="tab-btn" id="tab-exchange-rates" onclick="switchTab('exchange-rates')">Exchange Rates</button>
+      </div>
+
+      <!-- ── Users tab ─────────────────────────────────────────── -->
+      <div class="tab-pane" id="pane-users">
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>ID</th><th>Full Name</th><th>Username</th><th>Email</th>
+                <th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="userTable">
+                <tr class="skel-row"><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell" style="width:70px"></div></td><td><div class="skel-cell" style="width:60px"></div></td><td><div class="skel-cell" style="width:110px"></div></td><td><div class="skel-cell" style="width:80px"></div></td></tr>
+                <tr class="skel-row"><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell" style="width:70px"></div></td><td><div class="skel-cell" style="width:60px"></div></td><td><div class="skel-cell" style="width:110px"></div></td><td><div class="skel-cell" style="width:80px"></div></td></tr>
+                <tr class="skel-row"><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell"></div></td><td><div class="skel-cell" style="width:70px"></div></td><td><div class="skel-cell" style="width:60px"></div></td><td><div class="skel-cell" style="width:110px"></div></td><td><div class="skel-cell" style="width:80px"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Exchange Rates tab ─────────────────────────────────── -->
+      <div class="tab-pane" id="pane-exchange-rates">
+
+        <!-- Rate tiles -->
+        <div class="rate-card" id="rateTiles">
+          <div class="rate-tile usd"><div class="rate-currency">USD</div><div class="rate-value" id="rt-USD">—</div><div class="rate-meta" id="rm-USD">Base currency</div></div>
+          <div class="rate-tile zwg"><div class="rate-currency">ZWG</div><div class="rate-value" id="rt-ZWG">—</div><div class="rate-meta" id="rm-ZWG">Loading…</div></div>
+        </div>
+
+        <!-- Rate table -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <span class="card-title">Current Exchange Rates</span>
+            <button class="btn btn-sm btn-secondary" onclick="loadRates()">↻ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Currency</th><th>Rate → USD</th><th>Source</th><th>Type</th><th>Last Updated</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="ratesTable">
+                <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Set / Override form -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Set / Override Rate</span></div>
+          <div style="padding:0 0 4px">
+            <div class="grid-2" style="margin-bottom:0">
+              <div class="form-group">
+                <label>Currency</label>
+                <select id="er_currency">
+                  <option value="ZWG">ZWG</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Rate to USD</label>
+                <input id="er_rate" type="number" step="0.0000001" placeholder="e.g. 0.001">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Source <span style="font-size:11px;color:var(--text3)">(optional)</span></label>
+              <input id="er_source" placeholder="e.g. RBZ mid-rate 2025-05">
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="saveRate()">Save Rate</button>
+              <button class="btn btn-secondary" onclick="fetchRate()">⬇ Fetch from Provider</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="userModalTitle">Add User</span>
+      <button class="modal-close" onclick="closeModal('userModal')">×</button>
+    </div>
+    <input type="hidden" id="u_editId">
+    <div class="grid-2">
+      <div class="form-group"><label>Full Name</label><input id="u_fname" placeholder="e.g. Tariro Chaza"></div>
+      <div class="form-group"><label>Username</label><input id="u_uname" placeholder="e.g. t.chaza"></div>
+    </div>
+    <div class="form-group"><label>Email</label><input id="u_email" type="email" placeholder="user@harare.gov.zw"></div>
+    <div class="grid-2">
+      <div class="form-group"><label>Role</label>
+        <select id="u_role">
+          <option value="revenue_officer">Revenue Officer</option>
+          <option value="accountant">Accountant</option>
+          <option value="auditor">Auditor</option>
+          <option value="budget_officer">Budget Officer</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group" id="u_statusGroup" style="display:none"><label>Status</label>
+        <select id="u_active">
+          <option value="true">Active</option>
+          <option value="false">Inactive</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="u_pwdGroup">
+      <label>Password <span id="u_pwdHint" style="font-size:11px;color:var(--text3)">(required)</span></label>
+      <input id="u_pwd" type="password" placeholder="Enter password">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" id="u_saveBtn" onclick="saveUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('admin');
+const roleColors = { admin:'danger', revenue_officer:'info', auditor:'warning', accountant:'paid', budget_officer:'low' };
+const me = getUser();
+
+/* ── Tab switching ──────────────────────────────────────────────── */
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  renderTopbarActions(tab);
+  setUrlParam('tab', tab === 'users' ? null : tab);
+}
+
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'users') {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/users?format=csv','users.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/users?format=xlsx','users.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('User Registry','userTable','users.pdf')">⬇ PDF</button>
+      <button class="btn btn-primary"   onclick="openAddUserModal()">+ Add User</button>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+/* ── Users ──────────────────────────────────────────────────────── */
+
+function openAddUserModal() {
+  document.getElementById('u_editId').value = '';
+  document.getElementById('userModalTitle').textContent = 'Add User';
+  document.getElementById('u_saveBtn').textContent = 'Create User';
+  document.getElementById('u_uname').disabled = false;
+  document.getElementById('u_statusGroup').style.display = 'none';
+  document.getElementById('u_pwdHint').textContent = '(required)';
+  ['u_fname','u_uname','u_email','u_pwd'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('u_role').value = 'revenue_officer';
+  openModal('userModal');
+}
+
+function openEditUserModal(u) {
+  document.getElementById('u_editId').value = u.id;
+  document.getElementById('userModalTitle').textContent = `Edit User — ${u.username}`;
+  document.getElementById('u_saveBtn').textContent = 'Save Changes';
+  document.getElementById('u_uname').disabled = true;
+  document.getElementById('u_statusGroup').style.display = '';
+  document.getElementById('u_pwdHint').textContent = '(leave blank to keep current)';
+  document.getElementById('u_fname').value  = u.full_name;
+  document.getElementById('u_uname').value  = u.username;
+  document.getElementById('u_email').value  = u.email;
+  document.getElementById('u_role').value   = u.role;
+  document.getElementById('u_active').value = u.is_active ? 'true' : 'false';
+  document.getElementById('u_pwd').value    = '';
+  openModal('userModal');
+}
+
+async function saveUser() {
+  const editId = document.getElementById('u_editId').value;
+  const pwd    = document.getElementById('u_pwd').value;
+  if (editId) {
+    const data = {
+      full_name: document.getElementById('u_fname').value,
+      email:     document.getElementById('u_email').value,
+      role:      document.getElementById('u_role').value,
+      is_active: document.getElementById('u_active').value === 'true',
+    };
+    if (pwd) data.password = pwd;
+    try { await apiPut(`/api/users/${editId}`, data); toast('User updated','success'); closeModal('userModal'); loadUsers(); }
+    catch(e) { toast(e.message,'error'); }
+  } else {
+    if (!pwd) { toast('Password is required for new users','warning'); return; }
+    const data = {
+      username:  document.getElementById('u_uname').value,
+      full_name: document.getElementById('u_fname').value,
+      email:     document.getElementById('u_email').value,
+      role:      document.getElementById('u_role').value,
+      password:  pwd,
+    };
+    if (!data.username || !data.full_name || !data.email) { toast('All fields are required','warning'); return; }
+    try { await apiPost('/api/users', data); toast('User created','success'); closeModal('userModal'); loadUsers(); }
+    catch(e) { toast(e.message,'error'); }
+  }
+}
+
+async function deactivateUser(id, name) {
+  await confirmDelete(`Deactivate user "${name}"? They will no longer be able to log in.`, async () => {
+    try { await apiDelete(`/api/users/${id}`); toast('User deactivated','success'); loadUsers(); }
+    catch(e) { toast(e.message,'error'); }
+  });
+}
+
+async function loadUsers() {
+  try {
+    const data = await apiFetch('/api/users');
+    document.getElementById('userTable').innerHTML = data.map(u => `<tr>
+      <td style="color:var(--text3)">${u.id}</td>
+      <td style="font-weight:500">${u.full_name}</td>
+      <td><code style="font-size:12px;color:var(--primary-light)">${u.username}</code></td>
+      <td style="color:var(--text2);font-size:12.5px">${u.email}</td>
+      <td><span class="badge badge-${roleColors[u.role]||'info'}">${u.role.replace('_',' ')}</span></td>
+      <td>${u.is_active ? '<span class="badge badge-paid">Active</span>' : '<span class="badge badge-danger">Disabled</span>'}</td>
+      <td style="font-size:12px;color:var(--text2)">${u.last_login || '—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-secondary" onclick="openEditUserModal(${JSON.stringify(u).replace(/"/g,'&quot;')})">Edit</button>
+        ${u.id !== me?.id && u.is_active ? `<button class="btn btn-sm btn-danger" onclick="deactivateUser(${u.id},'${u.full_name}')">Deactivate</button>` : ''}
+      </td>
+    </tr>`).join('');
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ── Exchange Rates ─────────────────────────────────────────────── */
+
+async function loadRates() {
+  const tbody = document.getElementById('ratesTable');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:24px">Loading…</td></tr>';
+  const currencies = ['ZWG','USD'];
+  const rows = [];
+  for (const c of currencies) {
+    try {
+      const d = await apiFetch(`/api/exchange-rate?currency=${c}`);
+      const isManual = d.manual;
+      const tile = document.getElementById('rt-' + c);
+      const meta = document.getElementById('rm-' + c);
+      if (tile) {
+        tile.textContent = c === 'USD' ? '1.0000' : (d.rate_to_usd || '—');
+        if (meta) {
+          const updated = d.updated_at ? new Date(d.updated_at).toLocaleDateString('en-GB') : '—';
+          meta.innerHTML = `${isManual ? '<span class="rate-badge manual">Manual</span>' : '<span class="rate-badge auto">Auto</span>'} Updated ${updated}`;
+        }
+      }
+      rows.push(`<tr>
+        <td style="font-weight:600">${d.currency}</td>
+        <td><code style="color:var(--primary-light)">${d.rate_to_usd}</code></td>
+        <td style="color:var(--text2);font-size:12.5px">${d.source || '—'}</td>
+        <td>${isManual ? '<span class="badge badge-warning">Manual</span>' : '<span class="badge badge-paid">Auto</span>'}</td>
+        <td style="font-size:12px;color:var(--text2)">${d.updated_at ? new Date(d.updated_at).toLocaleString('en-GB') : '—'}</td>
+        <td><button class="btn btn-sm btn-secondary" onclick="fetchOneRate('${d.currency}')">⬇ Fetch</button></td>
+      </tr>`);
+    } catch(e) {
+      const tile = document.getElementById('rt-' + c);
+      const meta = document.getElementById('rm-' + c);
+      if (tile) tile.textContent = '—';
+      if (meta) meta.textContent = 'No rate set';
+      rows.push(`<tr><td style="font-weight:600">${c}</td><td colspan="4" style="color:var(--text3)">No rate configured</td><td><button class="btn btn-sm btn-secondary" onclick="fetchOneRate('${c}')">⬇ Fetch</button></td></tr>`);
+    }
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+async function saveRate() {
+  const currency = document.getElementById('er_currency').value;
+  const rate     = parseFloat(document.getElementById('er_rate').value);
+  const source   = document.getElementById('er_source').value || 'manual-ui';
+  if (!rate || isNaN(rate)) { toast('Enter a valid rate','warning'); return; }
+  try {
+    await apiFetch('/api/exchange-rate/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currency, rate_to_usd: rate, source, manual: true }),
+    });
+    toast(`Rate for ${currency} saved`, 'success');
+    document.getElementById('er_rate').value   = '';
+    document.getElementById('er_source').value = '';
+    loadRates();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function fetchRate() {
+  const currency = document.getElementById('er_currency').value;
+  await fetchOneRate(currency);
+}
+
+async function fetchOneRate(currency) {
+  toast(`Fetching ${currency}…`, 'info');
+  try {
+    await apiFetch(`/api/exchange-rate/fetch?currency=${currency}`, { method: 'POST' });
+    toast(`${currency} rate updated`, 'success');
+    loadRates();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+/* ── Init ───────────────────────────────────────────────────────── */
+
+(function init() {
+  const p   = getUrlParams();
+  const tab = p.tab === 'exchange-rates' ? 'exchange-rates' : 'users';
+  switchTab(tab);
+  loadUsers();
+  loadRates();
+})();
+</script>
+</body>
+</html>

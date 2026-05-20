@@ -147,7 +147,7 @@ async function loadRatepayers(page = 1) {
           <button class="btn btn-sm btn-secondary" onclick="openEditModal(${r.id},'${escHtml(r.full_name)}','${escHtml(r.address)}','${r.ward}','${r.zone}','${r.phone||''}','${r.email||''}','${r.property_type}')">Edit</button>
            <button class="btn btn-sm" style="background:rgba(59,125,216,.15);color:var(--primary-light);border:1px solid rgba(59,125,216,.3);font-size:11.5px;padding:3px 8px;border-radius:6px;cursor:pointer" onclick="viewStatement(${r.id},'${escHtml(r.full_name)}')">📄 Statement</button>
           <a class="btn btn-sm btn-secondary" href="${pageUrl('invoices.html',{ratepayer_id:r.id})}">Invoices</a>
-          <a class="btn btn-sm btn-secondary" href="${pageUrl('aging.html',{account:r.account_number})}">Aging</a>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('analytics.html',{account:r.account_number})}">Aging</a>
           <button class="btn btn-sm btn-danger" onclick="deleteRatepayer(${r.id},'${escHtml(r.full_name)}')">Delete</button>
         </td>
       </tr>`).join('');
@@ -185,7 +185,7 @@ async function viewRatepayer(id) {
     document.querySelector('#viewModal .modal-footer').innerHTML = `
       <a class="btn btn-secondary" href="${pageUrl('invoices.html',{ratepayer_id:r.id})}">View Invoices</a>
       <a class="btn btn-secondary" href="${pageUrl('payments.html',{ratepayer_id:r.id})}">View Payments</a>
-      <a class="btn btn-secondary" href="${pageUrl('aging.html',{account:r.account_number})}">Aging</a>
+      <a class="btn btn-secondary" href="${pageUrl('analytics.html',{account:r.account_number})}">Aging</a>
       <button class="btn btn-secondary" onclick="closeModal('viewModal')">Close</button>`;
     openModal('viewModal');
   } catch(e) { toast(e.message, 'error'); }
@@ -203,7 +203,7 @@ function openAddModal() {
 }
 
 function viewStatement(id, name) {
-  navigateTo('reconciliation.html', {});
+  navigateTo('payments.html', { tab: 'reconciliation' });
   // Open statement in new window for printing
   const win = window.open('', '_blank');
   const token = localStorage.getItem('fms_token');

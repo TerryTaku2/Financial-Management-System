@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var dest = 'reports.html?panel=coh';
+  var month = params.get('month');
+  var year  = params.get('year');
+  if (month) dest += '&month=' + encodeURIComponent(month);
+  if (year)  dest += '&year='  + encodeURIComponent(year);
+  window.location.replace(dest);
+</script>
+</head><body></body></html>

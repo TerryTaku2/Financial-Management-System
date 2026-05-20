@@ -180,6 +180,18 @@ class Budget(Base):
     spent_amount = Column(Float, default=0.0)
     remaining = Column(Float)
     created_at = Column(DateTime, default=utcnow)
+    sections = relationship("BudgetSection", back_populates="budget", cascade="all, delete-orphan")
+
+class BudgetSection(Base):
+    __tablename__ = "budget_sections"
+    id = Column(Integer, primary_key=True, index=True)
+    budget_id = Column(Integer, ForeignKey("budgets.id", ondelete="CASCADE"))
+    section_name = Column(String)
+    allocated_amount = Column(Float, default=0.0)
+    spent_amount = Column(Float, default=0.0)
+    remaining = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=utcnow)
+    budget = relationship("Budget", back_populates="sections")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

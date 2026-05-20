@@ -29,7 +29,7 @@ except ImportError:
     EXCEL_OK = False
 
 from database import (get_db, User, Ratepayer, Invoice, Payment, Expenditure,
-                      Budget, AuditLog, LeakageAlert, RevenueTarget,
+                      Budget, BudgetSection, AuditLog, LeakageAlert, RevenueTarget,
                       UserRole, PaymentStatus, RevenueCategory, AnomalyFlag,
                       LoginAttempt, PaymentPlan, PaymentPlanStatus, SystemNotification,
                       ExchangeRate, BillingRate, BillingRun)
@@ -133,27 +133,9 @@ def amount_to_usd(amount: float, currency: Optional[str], db: Session = None) ->
 
 
 def usd_payment_sum(query) -> float:
-    # Groups payments by currency and converts each group to USD using DB rates where available.
-    rows = query.with_entities(Payment.currency, func.sum(Payment.amount)).group_by(Payment.currency).all()
-    total = 0.0
-    session = None
-    try:
-        session = query.session
-    except Exception:
-        session = None
-    codes = [normalize_currency_code(r[0]) for r in rows]
-    rate_map = {}
-    if session is not None and codes:
-        try:
-            ers = session.query(ExchangeRate).filter(ExchangeRate.currency.in_(codes)).all()
-            rate_map = {er.currency: er.rate_to_usd for er in ers}
-        except Exception:
-            rate_map = {}
-    for currency, amt in rows:
-        code = normalize_currency_code(currency)
-        rate = rate_map.get(code, CURRENCY_CONVERSION_RATES.get(code, 1.0))
-        total += (amt or 0.0) * rate
-    return round(total, 2)
+    # All payments are recorded in USD — sum amounts directly.
+    result = query.with_entities(func.sum(Payment.amount)).scalar()
+    return round(result or 0.0, 2)
 
 # â"€â"€â"€ AI: Ratepayer Risk Score â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def compute_ratepayer_risk(rp, db) -> dict:
@@ -517,7 +499,7 @@ class PaymentCreate(BaseModel):
 
     @validator("currency", pre=True, always=True)
     def normalize_currency(cls, v):
-        return normalize_currency_code(v)
+        return "USD"
 
 class ExpenditureCreate(BaseModel):
     department: str
@@ -542,6 +524,16 @@ class BudgetUpdate(BaseModel):
     fiscal_year: Optional[str] = None
     department: Optional[str] = None
     category: Optional[str] = None
+    allocated_amount: Optional[float] = None
+    spent_amount: Optional[float] = None
+
+class BudgetSectionCreate(BaseModel):
+    section_name: str
+    allocated_amount: float
+    spent_amount: float = 0.0
+
+class BudgetSectionUpdate(BaseModel):
+    section_name: Optional[str] = None
     allocated_amount: Optional[float] = None
     spent_amount: Optional[float] = None
 
@@ -678,11 +670,12 @@ def change_password(data: ChangePasswordRequest, db: Session = Depends(get_db),
 @app.get("/api/dashboard/summary")
 def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     refresh_overdue_invoices(db)
-    # Revenue balance: uses Invoice.amount_paid so the equation is always exact:
-    # total_billed = total_collected + total_outstanding (sum(amount) = sum(amount_paid) + sum(balance))
-    total_billed      = db.query(func.sum(Invoice.amount)).scalar() or 0
-    total_collected   = db.query(func.sum(Invoice.amount_paid)).scalar() or 0
-    total_outstanding = db.query(func.sum(Invoice.balance)).scalar() or 0
+    # Revenue balance — waived invoices are excluded (written off, not owed or collected).
+    # Equation always holds: total_billed = total_collected + total_outstanding
+    _not_waived = Invoice.status != PaymentStatus.waived
+    total_billed      = db.query(func.sum(Invoice.amount)).filter(_not_waived).scalar() or 0
+    total_collected   = db.query(func.sum(Invoice.amount_paid)).filter(_not_waived).scalar() or 0
+    total_outstanding = db.query(func.sum(Invoice.balance)).filter(_not_waived).scalar() or 0
     collection_rate   = round(total_collected / total_billed * 100, 1) if total_billed > 0 else 0
 
     # Actual payments received via Payment table (USD-equivalent, includes ZIG conversion)
@@ -705,7 +698,7 @@ def dashboard_summary(db: Session = Depends(get_db), current_user: User = Depend
     recon_rate    = round(recon_count / pmt_total * 100, 1) if pmt_total > 0 else 0
     unrecon_amt   = usd_payment_sum(db.query(Payment).filter(Payment.is_reconciled == False))
     method_totals = {}
-    for method in ["cash", "ecocash", "bank_transfer", "rtgs", "zipit"]:
+    for method in ["cash", "ecocash", "zipit", "bank_transfer", "cheque"]:
         method_totals[method] = round(usd_payment_sum(
             db.query(Payment).filter(Payment.payment_method == method)), 2)
 
@@ -1014,10 +1007,13 @@ def update_invoice(inv_id: int, data: InvoiceUpdate, db: Session = Depends(get_d
         inv.due_date = datetime.fromisoformat(data.due_date)
     if data.status:
         inv.status = data.status
+        if data.status == PaymentStatus.waived:
+            inv.balance = 0.0
     if data.notes is not None:
         inv.notes = data.notes
     if data.amount is not None:
         inv.amount = data.amount
+        inv.amount_paid = min(inv.amount_paid, data.amount)
         inv.balance = max(0, data.amount - inv.amount_paid)
     db.add(AuditLog(user_id=current_user.id, action="UPDATE", table_name="invoices",
                     record_id=inv_id, description=f"Updated invoice {inv.invoice_number}"))
@@ -1102,7 +1098,8 @@ def record_payment(data: PaymentCreate, background_tasks: BackgroundTasks,
     if data.invoice_id:
         inv = db.query(Invoice).filter(Invoice.id == data.invoice_id).first()
         if inv:
-            inv.amount_paid = min(inv.amount, inv.amount_paid + data.amount)
+            amt_usd = amount_to_usd(data.amount, data.currency, db)
+            inv.amount_paid = min(inv.amount, inv.amount_paid + amt_usd)
             inv.balance     = max(0, inv.amount - inv.amount_paid)
             if inv.balance == 0:
                 inv.status = PaymentStatus.paid
@@ -1152,8 +1149,9 @@ def delete_payment(pmt_id: int, db: Session = Depends(get_db),
     if pmt.invoice_id:
         inv = db.query(Invoice).filter(Invoice.id == pmt.invoice_id).first()
         if inv:
-            inv.amount_paid = max(0, inv.amount_paid - pmt.amount)
-            inv.balance     = min(inv.amount, inv.balance + pmt.amount)
+            amt_usd = amount_to_usd(pmt.amount, pmt.currency, db)
+            inv.amount_paid = max(0, inv.amount_paid - amt_usd)
+            inv.balance     = min(inv.amount, inv.balance + amt_usd)
             if inv.amount_paid < inv.amount:
                 inv.status = PaymentStatus.overdue if inv.due_date < now() else PaymentStatus.pending
     db.add(AuditLog(user_id=current_user.id, action="DELETE", table_name="payments",
@@ -1237,11 +1235,20 @@ def delete_expenditure(exp_id: int, db: Session = Depends(get_db),
 @app.get("/api/budgets")
 def list_budgets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     items = db.query(Budget).all()
-    return [{"id": b.id, "fiscal_year": b.fiscal_year, "department": b.department,
-             "category": b.category, "allocated": b.allocated_amount,
-             "spent": b.spent_amount, "remaining": b.remaining,
-             "utilisation": round(b.spent_amount / b.allocated_amount * 100, 1) if b.allocated_amount > 0 else 0
-             } for b in items]
+    result = []
+    for b in items:
+        sections = [{"id": s.id, "section_name": s.section_name,
+                     "allocated": s.allocated_amount, "spent": s.spent_amount,
+                     "remaining": s.remaining,
+                     "utilisation": round(s.spent_amount / s.allocated_amount * 100, 1) if s.allocated_amount > 0 else 0
+                     } for s in b.sections]
+        result.append({"id": b.id, "fiscal_year": b.fiscal_year, "department": b.department,
+                        "category": b.category, "allocated": b.allocated_amount,
+                        "spent": b.spent_amount, "remaining": b.remaining,
+                        "utilisation": round(b.spent_amount / b.allocated_amount * 100, 1) if b.allocated_amount > 0 else 0,
+                        "sections": sections,
+                        "sections_allocated": sum(s["allocated"] for s in sections)})
+    return result
 
 @app.post("/api/budgets")
 def create_budget(data: BudgetCreate,
@@ -1287,6 +1294,184 @@ def delete_budget(bud_id: int,
                     record_id=bud_id, description=f"Deleted budget: {b.department} {b.fiscal_year}"))
     db.delete(b); db.commit()
     return {"message": "Budget deleted"}
+
+# ─── Budget Sections ──────────────────────────────────────────────────────────
+
+@app.get("/api/budgets/{budget_id}/sections")
+def list_budget_sections(budget_id: int, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    b = db.query(Budget).filter(Budget.id == budget_id).first()
+    if not b: raise HTTPException(404, "Budget not found")
+    return [{"id": s.id, "section_name": s.section_name,
+             "allocated": s.allocated_amount, "spent": s.spent_amount,
+             "remaining": s.remaining,
+             "utilisation": round(s.spent_amount / s.allocated_amount * 100, 1) if s.allocated_amount > 0 else 0
+             } for s in b.sections]
+
+@app.post("/api/budgets/{budget_id}/sections")
+def create_budget_section(budget_id: int, data: BudgetSectionCreate,
+                           db: Session = Depends(get_db),
+                           current_user: User = Depends(require_roles(UserRole.admin, UserRole.budget_officer, UserRole.accountant))):
+    b = db.query(Budget).filter(Budget.id == budget_id).first()
+    if not b: raise HTTPException(404, "Budget not found")
+    existing = db.query(BudgetSection).filter(
+        BudgetSection.budget_id == budget_id,
+        BudgetSection.section_name == data.section_name).first()
+    if existing:
+        raise HTTPException(400, "A section with this name already exists for this department budget.")
+    current_total = sum(s.allocated_amount for s in b.sections)
+    if current_total + data.allocated_amount > b.allocated_amount:
+        available = b.allocated_amount - current_total
+        raise HTTPException(400, f"Section allocation exceeds department budget. Available: ${available:,.2f}")
+    s = BudgetSection(budget_id=budget_id, section_name=data.section_name,
+                      allocated_amount=data.allocated_amount, spent_amount=data.spent_amount,
+                      remaining=data.allocated_amount - data.spent_amount)
+    db.add(s)
+    db.add(AuditLog(user_id=current_user.id, action="CREATE", table_name="budget_sections",
+                    description=f"Section '{data.section_name}' added to {b.department}"))
+    db.commit()
+    return {"id": s.id, "message": "Section created"}
+
+@app.put("/api/budget-sections/{section_id}")
+def update_budget_section(section_id: int, data: BudgetSectionUpdate,
+                           db: Session = Depends(get_db),
+                           current_user: User = Depends(require_roles(UserRole.admin, UserRole.budget_officer, UserRole.accountant))):
+    s = db.query(BudgetSection).filter(BudgetSection.id == section_id).first()
+    if not s: raise HTTPException(404, "Section not found")
+    b = db.query(Budget).filter(Budget.id == s.budget_id).first()
+    new_alloc = data.allocated_amount if data.allocated_amount is not None else s.allocated_amount
+    other_total = sum(sec.allocated_amount for sec in b.sections if sec.id != section_id)
+    if other_total + new_alloc > b.allocated_amount:
+        available = b.allocated_amount - other_total
+        raise HTTPException(400, f"Section allocation exceeds department budget. Available: ${available:,.2f}")
+    for k, v in data.dict(exclude_none=True).items():
+        setattr(s, k, v)
+    s.remaining = s.allocated_amount - s.spent_amount
+    db.add(AuditLog(user_id=current_user.id, action="UPDATE", table_name="budget_sections",
+                    record_id=section_id, description=f"Section '{s.section_name}' updated"))
+    db.commit()
+    return {"message": "Section updated"}
+
+@app.delete("/api/budget-sections/{section_id}")
+def delete_budget_section(section_id: int,
+                           db: Session = Depends(get_db),
+                           current_user: User = Depends(require_roles(UserRole.admin, UserRole.budget_officer))):
+    s = db.query(BudgetSection).filter(BudgetSection.id == section_id).first()
+    if not s: raise HTTPException(404, "Section not found")
+    db.add(AuditLog(user_id=current_user.id, action="DELETE", table_name="budget_sections",
+                    record_id=section_id, description=f"Section '{s.section_name}' deleted"))
+    db.delete(s); db.commit()
+    return {"message": "Section deleted"}
+
+@app.post("/api/admin/repair-invoice-balances")
+def repair_invoice_balances(db: Session = Depends(get_db),
+                            current_user: User = Depends(require_roles(UserRole.admin))):
+    """
+    Recalculate amount_paid and balance on every non-waived invoice from linked
+    Payment records. Fixes corruption caused by historical multi-currency recording
+    (ZIG amounts stored without conversion). All payments are treated as USD.
+    """
+    repaired = 0
+    for inv in db.query(Invoice).filter(Invoice.status != PaymentStatus.waived).all():
+        paid = db.query(func.sum(Payment.amount)).filter(Payment.invoice_id == inv.id).scalar() or 0.0
+        inv.amount_paid = round(min(inv.amount, paid), 2)
+        inv.balance     = round(max(0.0, inv.amount - inv.amount_paid), 2)
+        if inv.amount_paid >= inv.amount:
+            inv.status = PaymentStatus.paid
+        elif inv.balance > 0 and inv.due_date < now():
+            inv.status = PaymentStatus.overdue
+        elif inv.balance > 0:
+            inv.status = PaymentStatus.pending
+        repaired += 1
+    for inv in db.query(Invoice).filter(Invoice.status == PaymentStatus.waived).all():
+        inv.balance = 0.0
+        repaired += 1
+    db.add(AuditLog(user_id=current_user.id, action="REPAIR", table_name="invoices",
+                    description=f"Repaired {repaired} invoice balances (USD-only recalculation)"))
+    db.commit()
+    return {"message": f"Repaired {repaired} invoices. All balances now consistent with Payment records.",
+            "repaired": repaired}
+
+@app.post("/api/admin/seed-demo-budgets")
+def seed_demo_budgets(db: Session = Depends(get_db),
+                      current_user: User = Depends(require_roles(UserRole.admin, UserRole.budget_officer))):
+    DEMO = [
+        {"department": "Town Clerk Department",                       "allocated": 850_000, "spent": 312_000,
+         "sections": [("Information Communication and Technology", 180_000, 65_000),
+                      ("Harare Metropolitan Police",               140_000, 58_000),
+                      ("Corporate Communications",                100_000, 35_000),
+                      ("Supply Chain",                            180_000, 72_000),
+                      ("Monitoring & Evaluations",                110_000, 40_000),
+                      ("District Administration",                 140_000, 42_000)]},
+        {"department": "Chamber Secretary",                           "allocated": 420_000, "spent": 156_000,
+         "sections": [("Corporate Services",    80_000, 28_000), ("Administration",       70_000, 26_000),
+                      ("Legal Services",        75_000, 30_000), ("Emergency",            65_000, 22_000),
+                      ("Public Affairs",        60_000, 20_000), ("International Affairs", 70_000, 30_000)]},
+        {"department": "Harare Water Department",                     "allocated": 2_100_000, "spent": 980_000, "sections": []},
+        {"department": "City Health Department",                      "allocated": 1_650_000, "spent": 720_000, "sections": []},
+        {"department": "Department of Housing and Community Service", "allocated": 1_050_000, "spent": 440_000, "sections": []},
+        {"department": "Department of Works",                         "allocated": 1_320_000, "spent": 510_000, "sections": []},
+        {"department": "Human Capital and Public Services Department","allocated":   680_000, "spent": 280_000, "sections": []},
+        {"department": "Urban Planning Department",                   "allocated":   340_000, "spent": 130_000, "sections": []},
+        {"department": "Finance Department",                          "allocated":   530_000, "spent": 198_000,
+         "sections": [("Revenue Collection", 220_000, 82_000),
+                      ("Budget",             160_000, 60_000),
+                      ("Central Accounting", 150_000, 56_000)]},
+    ]
+    fy = "2025/2026"
+    cat = "Operations"
+    created = 0; skipped = 0; sections_added = 0
+    for item in DEMO:
+        dept = item["department"]
+        existing = db.query(Budget).filter(Budget.department == dept, Budget.fiscal_year == fy, Budget.category == cat).first()
+        if existing:
+            skipped += 1
+            b = existing
+        else:
+            b = Budget(fiscal_year=fy, department=dept, category=cat,
+                       allocated_amount=item["allocated"], spent_amount=item["spent"],
+                       remaining=item["allocated"] - item["spent"])
+            db.add(b); db.flush()
+            db.add(AuditLog(user_id=current_user.id, action="CREATE", table_name="budgets",
+                            record_id=b.id, description=f"Demo budget seeded: {dept}"))
+            created += 1
+        for sec_name, sec_alloc, sec_spent in item.get("sections", []):
+            exists_sec = db.query(BudgetSection).filter(BudgetSection.budget_id == b.id,
+                                                        BudgetSection.section_name == sec_name).first()
+            if not exists_sec:
+                s = BudgetSection(budget_id=b.id, section_name=sec_name,
+                                  allocated_amount=sec_alloc, spent_amount=sec_spent,
+                                  remaining=sec_alloc - sec_spent)
+                db.add(s)
+                sections_added += 1
+    # ── Revenue targets for the fiscal year ──────────────────────────
+    REV_TARGETS = [
+        ("rates",     5_000_000),
+        ("water",     3_800_000),
+        ("sewerage",  1_800_000),
+        ("refuse",    1_200_000),
+        ("licensing",   750_000),
+        ("parking",     400_000),
+        ("rentals",     900_000),
+        ("other",       350_000),
+    ]
+    rt_created = 0; rt_skipped = 0
+    for cat, amount in REV_TARGETS:
+        existing_rt = db.query(RevenueTarget).filter(
+            RevenueTarget.fiscal_year == fy,
+            RevenueTarget.category    == cat
+        ).first()
+        if existing_rt:
+            rt_skipped += 1
+        else:
+            db.add(RevenueTarget(fiscal_year=fy, category=cat, target_amount=amount,
+                                 period="annual", created_by=current_user.id))
+            rt_created += 1
+
+    db.commit()
+    return {"message": (f"Done — {created} budgets created, {skipped} already existed, "
+                        f"{sections_added} sections added, "
+                        f"{rt_created} revenue targets seeded, {rt_skipped} already existed")}
 
 # â"€â"€â"€ Leakage & Anomalies â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -2081,7 +2266,7 @@ def download_template(entity: str, format: str = "csv",
         "invoices":   (["account_number", "category", "amount", "due_date", "notes"],
                        [["COH-123456", "rates", "150.00", "2026-06-30", ""]]),
         "budgets":    (["fiscal_year", "department", "category", "allocated_amount", "spent_amount"],
-                       [["2025/2026", "Finance", "Operations", "500000.00", "0.00"]]),
+                       [["2025/2026", "Finance Department", "Operations", "500000.00", "0.00"]]),
         "revenue-targets": (["fiscal_year", "category", "target_amount", "period", "notes"],
                             [["2025/2026", "rates", "1500000.00", "annual", ""],
                              ["2025/2026", "water", "800000.00", "annual", ""],
@@ -2139,7 +2324,7 @@ def report_financial_summary(format: str = "json", db: Session = Depends(get_db)
         func.sum(Invoice.amount_paid).label("collected"),
         func.sum(Invoice.balance).label("outstanding"),
         func.count(Invoice.id).label("count")
-    ).group_by(Invoice.category).all()
+    ).filter(Invoice.status != PaymentStatus.waived).group_by(Invoice.category).all()
 
     rows_json = []
     rows_data = []
@@ -2169,6 +2354,226 @@ def report_financial_summary(format: str = "json", db: Session = Depends(get_db)
     return export_response(format, headers, rows_data,
                            "financial_summary.csv", "financial_summary.xlsx",
                            "Financial Summary", "City of Harare FMS - Financial Summary Report")
+
+@app.get("/api/reports/coh-financial-report")
+def coh_financial_report(
+    month: int = Query(default=None, ge=1, le=12),
+    year:  int = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from calendar import monthrange
+    _now = now()
+    if not year:  year  = _now.year
+    if not month: month = _now.month
+
+    _, last_day  = monthrange(year, month)
+    period_start = datetime(year, month, 1)
+    period_end   = datetime(year, month, last_day, 23, 59, 59)
+
+    # Zimbabwe fiscal year: July–June
+    fy = f"{year}/{year+1}" if month >= 7 else f"{year-1}/{year}"
+
+    # ZWG exchange rate
+    er = db.query(ExchangeRate).filter(ExchangeRate.currency == "ZIG").first()
+    rate_to_usd = (er.rate_to_usd if er and er.rate_to_usd else 0.001)
+    zwg = 1.0 / rate_to_usd
+
+    def zwg_val(v): return round((v or 0) * zwg, 2)
+
+    # ── Revenue targets (annual budget for revenue) ───────────────────
+    targets = db.query(RevenueTarget).filter(RevenueTarget.fiscal_year == fy).all()
+    if not targets:
+        # fallback: latest available targets regardless of year
+        targets = db.query(RevenueTarget).order_by(desc(RevenueTarget.created_at)).limit(30).all()
+    target_by_cat: dict = {}
+    for t in targets:
+        cat = (t.category or "").strip().lower()
+        target_by_cat[cat] = target_by_cat.get(cat, 0) + (t.target_amount or 0)
+
+    # ── Budgets (annual expenditure budget by department) ─────────────
+    budgets = db.query(Budget).filter(Budget.fiscal_year == fy).all()
+    if not budgets:
+        budgets = db.query(Budget).all()
+
+    budget_by_dept: dict = {}
+    budget_spent_by_dept: dict = {}
+    total_budget_usd = 0.0
+    for b in budgets:
+        dept = (b.department or "").strip()
+        budget_by_dept[dept]       = budget_by_dept.get(dept, 0)       + (b.allocated_amount or 0)
+        budget_spent_by_dept[dept] = budget_spent_by_dept.get(dept, 0) + (b.spent_amount     or 0)
+        total_budget_usd += (b.allocated_amount or 0)
+
+    # ── Invoices for period ───────────────────────────────────────────
+    inv_rows = db.query(
+        Invoice.category,
+        func.sum(Invoice.amount).label("billed"),
+        func.sum(Invoice.amount_paid).label("collected")
+    ).filter(
+        Invoice.issue_date >= period_start,
+        Invoice.issue_date <= period_end
+    ).group_by(Invoice.category).all()
+
+    billing   = {str(r.category): round(r.billed    or 0, 2) for r in inv_rows}
+    collected = {str(r.category): round(r.collected or 0, 2) for r in inv_rows}
+
+    # ── Expenditures for period (approved only) ───────────────────────
+    exp_dept_rows = db.query(
+        Expenditure.department,
+        func.sum(Expenditure.amount).label("amount")
+    ).filter(
+        Expenditure.expenditure_date >= period_start,
+        Expenditure.expenditure_date <= period_end,
+        Expenditure.is_approved == True
+    ).group_by(Expenditure.department).all()
+    exp_by_dept = {(r.department or "").strip(): round(r.amount or 0, 2) for r in exp_dept_rows}
+
+    exp_line_rows = db.query(
+        Expenditure.budget_line,
+        func.sum(Expenditure.amount).label("amount")
+    ).filter(
+        Expenditure.expenditure_date >= period_start,
+        Expenditure.expenditure_date <= period_end,
+        Expenditure.is_approved == True
+    ).group_by(Expenditure.budget_line).all()
+    exp_by_line = {(r.budget_line or "general").strip().lower(): round(r.amount or 0, 2) for r in exp_line_rows}
+
+    total_exp_usd     = sum(exp_by_dept.values())
+    total_billing_usd = sum(billing.values())
+    total_collected_usd = sum(collected.values())
+
+    # ── Lookup helpers ────────────────────────────────────────────────
+    def rt(cat):   return zwg_val(target_by_cat.get(cat, 0))
+    def b(cat):    return zwg_val(billing.get(cat, 0))
+    def c(cat):    return zwg_val(collected.get(cat, 0))
+    def bd(dept):  return zwg_val(budget_by_dept.get(dept, 0))
+    # Actual dept expenditure: use Expenditure records; fall back to budget_spent/12 as monthly proxy
+    def ea(dept):
+        actual = exp_by_dept.get(dept, 0)
+        if actual:
+            return zwg_val(actual)
+        return zwg_val(budget_spent_by_dept.get(dept, 0) / 12.0)
+    def el(line):  return zwg_val(exp_by_line.get(line.lower(), 0))
+
+    prop_factor = 1.0 / 12.0
+    def prop(v):   return round(v * prop_factor, 2)
+
+    # ── Compensation of employees: split Human Capital dept budget ────
+    HC = "Human Capital and Public Services Department"
+    hc_zwg   = zwg_val(budget_by_dept.get(HC, 0))
+    hc_wages = round(hc_zwg * 0.50, 2)
+    hc_bonus = round(hc_zwg * 0.10, 2)
+    hc_allow = round(hc_zwg * 0.15, 2)
+    hc_soc   = round(hc_zwg * 0.08, 2)
+    hc_sdl   = round(hc_zwg * 0.05, 2)
+    hc_zim   = round(hc_zwg * 0.04, 2)
+    hc_coun  = round(hc_zwg * 0.08, 2)
+
+    hc_act   = ea(HC)
+    hc_act_wages = round(hc_act * 0.50, 2)
+    hc_act_bonus = round(hc_act * 0.10, 2)
+    hc_act_allow = round(hc_act * 0.15, 2)
+    hc_act_soc   = round(hc_act * 0.08, 2)
+    hc_act_sdl   = round(hc_act * 0.05, 2)
+    hc_act_zim   = round(hc_act * 0.04, 2)
+    hc_act_coun  = round(hc_act * 0.08, 2)
+
+    # ── Goods & services: split operational dept budgets ─────────────
+    OPS = ["Town Clerk Department", "Chamber Secretary", "Urban Planning Department", "Finance Department"]
+    ops_zwg    = zwg_val(sum(budget_by_dept.get(d, 0) for d in OPS))
+    ops_goods  = round(ops_zwg * 0.60, 2)
+    ops_repair = round(ops_zwg * 0.25, 2)
+    ops_maint  = round(ops_zwg * 0.15, 2)
+
+    ops_act    = zwg_val(sum(exp_by_dept.get(d) or budget_spent_by_dept.get(d, 0) / 12.0 for d in OPS))
+    ops_act_goods  = round(ops_act * 0.60, 2)
+    ops_act_repair = round(ops_act * 0.25, 2)
+    ops_act_maint  = round(ops_act * 0.15, 2)
+
+    # ── Revenue line items ────────────────────────────────────────────
+    revenue_items = {
+        "tax_property":       {"annual": rt("rates"),     "billing": b("rates"),     "revenue": c("rates")},
+        "trans_curr_central": {"annual": 0, "billing": 0, "revenue": 0},
+        "trans_curr_other":   {"annual": 0, "billing": 0, "revenue": 0},
+        "trans_cap_central":  {"annual": 0, "billing": 0, "revenue": 0},
+        "trans_cap_other":    {"annual": 0, "billing": 0, "revenue": 0},
+        "grants_grants":      {"annual": 0, "billing": 0, "revenue": 0},
+        "grants_donations":   {"annual": 0, "billing": 0, "revenue": 0},
+        "fines":              {"annual": rt("parking"),   "billing": b("parking"),   "revenue": c("parking")},
+        "sale_of_goods":      {"annual": rt("water"),     "billing": b("water"),     "revenue": c("water")},
+        "admin_fees":         {"annual": rt("other"),     "billing": b("other"),     "revenue": c("other")},
+        "incidental":         {"annual": 0, "billing": 0, "revenue": 0},
+        "licences":           {"annual": rt("licensing"), "billing": b("licensing"), "revenue": c("licensing")},
+        "rentals":            {"annual": rt("rentals"),   "billing": b("rentals"),   "revenue": c("rentals")},
+        "estates":            {"annual": 0, "billing": 0, "revenue": 0},
+        "service_charges": {
+            "annual":  zwg_val(target_by_cat.get("sewerage", 0) + target_by_cat.get("refuse", 0)),
+            "billing": zwg_val(billing.get("sewerage", 0)   + billing.get("refuse", 0)),
+            "revenue": zwg_val(collected.get("sewerage", 0) + collected.get("refuse", 0)),
+        },
+        "other_revenue": {"annual": 0, "billing": 0, "revenue": 0},
+        "loans":         {"annual": 0, "billing": 0, "revenue": 0},
+        "bonds":         {"annual": 0, "billing": 0, "revenue": 0},
+    }
+    for v in revenue_items.values():
+        v["prop"] = prop(v["annual"])
+
+    # ── Expenditure line items ────────────────────────────────────────
+    def _exp(line, fallback):
+        a = el(line)
+        return a if a else fallback
+
+    expenditure_items = {
+        "wages_cash":     {"annual": hc_wages,  "exp": _exp("wages_cash",  hc_act_wages),  "pmt": _exp("wages_cash",  hc_act_wages)},
+        "wages_kind":     {"annual": 0,          "exp": 0,                                   "pmt": 0},
+        "bonus":          {"annual": hc_bonus,  "exp": _exp("bonus",       hc_act_bonus),  "pmt": _exp("bonus",       hc_act_bonus)},
+        "allowances":     {"annual": hc_allow,  "exp": _exp("allowances",  hc_act_allow),  "pmt": _exp("allowances",  hc_act_allow)},
+        "social_contrib": {"annual": hc_soc,    "exp": _exp("social_contrib", hc_act_soc), "pmt": _exp("social_contrib", hc_act_soc)},
+        "sdl":            {"annual": hc_sdl,    "exp": _exp("sdl",         hc_act_sdl),    "pmt": _exp("sdl",         hc_act_sdl)},
+        "zimdef":         {"annual": hc_zim,    "exp": _exp("zimdef",      hc_act_zim),    "pmt": _exp("zimdef",      hc_act_zim)},
+        "councillors":    {"annual": hc_coun,   "exp": _exp("councillors", hc_act_coun),   "pmt": _exp("councillors", hc_act_coun)},
+        "goods_general":  {"annual": ops_goods,  "exp": _exp("goods_general",  ops_act_goods),  "pmt": _exp("goods_general",  ops_act_goods)},
+        "repairs":        {"annual": ops_repair, "exp": _exp("repairs",        ops_act_repair), "pmt": _exp("repairs",        ops_act_repair)},
+        "maintenance":    {"annual": ops_maint,  "exp": _exp("maintenance",    ops_act_maint),  "pmt": _exp("maintenance",    ops_act_maint)},
+        "interest_loans": {"annual": 0, "exp": 0, "pmt": 0},
+        "trans_curr_central": {"annual": 0, "exp": 0, "pmt": 0},
+        "trans_curr_other":   {"annual": 0, "exp": 0, "pmt": 0},
+        "trans_cap_central":  {"annual": 0, "exp": 0, "pmt": 0},
+        "trans_cap_other":    {"annual": 0, "exp": 0, "pmt": 0},
+        "grants_grants":      {"annual": 0, "exp": 0, "pmt": 0},
+        "grants_donations":   {"annual": 0, "exp": 0, "pmt": 0},
+        "social_funeral":     {"annual": 0, "exp": 0, "pmt": 0},
+        "social_medical":     {"annual": 0, "exp": 0, "pmt": 0},
+        "cap_roads":      {"annual": bd("Department of Works"),                         "exp": ea("Department of Works"),                         "pmt": ea("Department of Works")},
+        "cap_education":  {"annual": 0, "exp": 0, "pmt": 0},
+        "cap_health":     {"annual": bd("City Health Department"),                      "exp": ea("City Health Department"),                      "pmt": ea("City Health Department")},
+        "cap_water":      {"annual": bd("Harare Water Department"),                     "exp": ea("Harare Water Department"),                     "pmt": ea("Harare Water Department")},
+        "cap_roads2":     {"annual": 0, "exp": 0, "pmt": 0},
+        "cap_social":     {"annual": bd("Department of Housing and Community Service"), "exp": ea("Department of Housing and Community Service"), "pmt": ea("Department of Housing and Community Service")},
+        "cap_electricity":{"annual": 0, "exp": 0, "pmt": 0},
+        "cap_operational":{"annual": 0, "exp": 0, "pmt": 0},
+    }
+    for v in expenditure_items.values():
+        v["prop"] = prop(v["annual"])
+
+    total_rev_target_usd = sum(target_by_cat.values())
+    total_annual_zwg = zwg_val(total_budget_usd + total_rev_target_usd)
+
+    return {
+        "period":               datetime(year, month, 1).strftime("%B %Y"),
+        "month":                month,
+        "year":                 year,
+        "fiscal_year":          fy,
+        "zwg_factor":           round(zwg, 4),
+        "exchange_rate_source": er.source if er else "default (1 USD = 1,000 ZWG)",
+        "total_annual_budget_zwg":  total_annual_zwg,
+        "total_billing_zwg":        zwg_val(total_billing_usd),
+        "total_collected_zwg":      zwg_val(total_collected_usd),
+        "total_exp_zwg":            zwg_val(total_exp_usd),
+        "revenue":                  revenue_items,
+        "expenditure":              expenditure_items,
+    }
 
 @app.get("/api/reports/audit-trail")
 def report_audit_trail(format: str = "csv",

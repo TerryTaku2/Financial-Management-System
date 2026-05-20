@@ -2,50 +2,118 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Payments — City of Harare FMS</title>
+<title>Payments &amp; Reconciliation — City of Harare FMS</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="app-layout">
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
     <div class="topbar">
-      <span class="topbar-title">Payment Records</span>
-      <div class="topbar-right">
-        <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=csv','payments.csv')">⬇ CSV</button>
-        <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=xlsx','payments.xlsx')">⬇ Excel</button>
-        <button class="btn btn-secondary" onclick="exportTablePDF('Payment Records','pmtTable','payments.pdf')">⬇ PDF</button>
-        <button class="btn btn-primary" onclick="openAddModal()">+ Record Payment</button>
-      </div>
+      <span class="topbar-title">Payments &amp; Reconciliation</span>
+      <div class="topbar-right" id="topbarActions"></div>
     </div>
     <div class="page-content">
-      <div style="background:rgba(243,156,18,0.08);border:1px solid rgba(243,156,18,0.25);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:12px;color:var(--text2)">
-        <strong style="color:var(--warning)">Multi-currency note:</strong>
-        USD and ZIG payments are converted to USD-equivalent values in summary dashboards.
-        ZIG/ZWG amounts are normalized before aggregate reporting.
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
+        <button class="tab-btn active" id="tab-payments"       onclick="switchTab('payments')">Payments</button>
+        <button class="tab-btn"        id="tab-reconciliation" onclick="switchTab('reconciliation')">Reconciliation</button>
       </div>
-      <div class="card">
-        <div class="filter-bar">
-          <input type="text" id="searchInput" placeholder="🔍  Search ratepayer name or account..." style="min-width:240px" oninput="debounceLoad()">
-          <select id="reconFilter" onchange="loadPayments()">
-            <option value="">All Payments</option>
-            <option value="false">Unreconciled</option>
-            <option value="true">Reconciled</option>
-          </select>
-          <span id="countBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+
+      <!-- ── Tab: Payments ── -->
+      <div id="pane-payments">
+        <div class="card">
+          <div class="filter-bar">
+            <input type="text" id="pmtSearch" placeholder="🔍  Search ratepayer name or account..." style="min-width:240px" oninput="debouncePayments()">
+            <select id="pmtReconFilter" onchange="loadPayments()">
+              <option value="">All Payments</option>
+              <option value="false">Unreconciled</option>
+              <option value="true">Reconciled</option>
+            </select>
+            <span id="pmtCountBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Receipt #</th><th>Ratepayer</th><th>Amount</th>
+                <th>Method</th><th>Date</th><th>Reconciled</th><th>Anomaly</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="pmtTable"><tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pmtPagination"></div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th>Receipt #</th><th>Ratepayer</th><th>Amount</th>
-              <th>Method</th><th>Currency</th><th>Date</th>
-              <th>Reconciled</th><th>Anomaly</th><th>Actions</th>
-            </tr></thead>
-            <tbody id="pmtTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
-          </table>
+      </div>
+
+      <!-- ── Tab: Reconciliation ── -->
+      <div id="pane-reconciliation" style="display:none">
+
+        <!-- KPI cards -->
+        <div class="recon-summary" id="reconSummary">
+          <div class="recon-kpi"><div class="kv kv-blue"  id="kvTotal">—</div><div class="kl">Total Payments</div></div>
+          <div class="recon-kpi"><div class="kv kv-green" id="kvRecon">—</div><div class="kl">Reconciled</div></div>
+          <div class="recon-kpi"><div class="kv kv-red"   id="kvUnrecon">—</div><div class="kl">Unreconciled</div></div>
+          <div class="recon-kpi"><div class="kv kv-warn"  id="kvAmt">—</div><div class="kl">Unreconciled Amount</div></div>
+          <div class="recon-kpi"><div class="kv kv-blue"  id="kvRate">—</div><div class="kl">Reconciliation Rate</div></div>
         </div>
-        <div class="pagination" id="pagination"></div>
+
+        <!-- Progress bar -->
+        <div class="card" style="margin-bottom:20px;padding:16px 20px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px">
+            <span style="font-weight:600;color:var(--text1)">Reconciliation Progress</span>
+            <span id="progressLabel" style="color:var(--text2)">—</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progressFill" style="width:0%;background:var(--success)"></div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text2);margin-top:6px" id="progressSub"></div>
+        </div>
+
+        <!-- Bulk reconcile notice -->
+        <div class="bulk-bar" id="bulkBar" style="display:none">
+          <div class="bulk-info">
+            <strong id="bulkCount">0</strong> unreconciled payments totalling
+            <strong id="bulkAmt">$0.00</strong> are pending reconciliation.
+            Bulk reconciliation logs every action in the immutable audit trail.
+          </div>
+          <button class="btn btn-primary" onclick="bulkReconcile()">✓ Reconcile All Now</button>
+        </div>
+
+        <!-- Payments register -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Payment Register</span></div>
+          <div class="filter-row">
+            <select id="reconFilter" onchange="loadReconciliation()">
+              <option value="">All Payments</option>
+              <option value="false">Unreconciled Only</option>
+              <option value="true">Reconciled Only</option>
+            </select>
+            <span id="reconCountBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>#</th><th>Receipt</th><th>Ratepayer</th><th>Amount</th>
+                <th>Method</th><th>Date</th><th>Status</th><th>Anomaly</th><th>Action</th>
+              </tr></thead>
+              <tbody id="reconTable"><tr><td colspan="9" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="reconPagination"></div>
+        </div>
+
+        <!-- Trend chart -->
+        <div class="card" style="margin-top:24px">
+          <div class="card-header">
+            <span class="card-title">Monthly Collection Rate Trend</span>
+            <span style="font-size:11.5px;color:var(--text2)">Last 12 months — billed vs collected</span>
+          </div>
+          <canvas id="trendChart" height="160"></canvas>
+        </div>
+
       </div>
     </div>
   </div>
@@ -61,17 +129,17 @@
     <div class="form-group"><label>Account Number</label><input id="f_rpacct" type="text" placeholder="e.g. COH-123456" autocomplete="off"></div>
     <div class="form-group"><label>Invoice ID (optional)</label><input id="f_invid" type="number" placeholder="Leave blank if no specific invoice"></div>
     <div class="grid-2">
-      <div class="form-group"><label>Amount</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Currency</label>
-        <select id="f_currency"><option value="USD">USD</option><option value="ZIG">ZIG</option></select>
-      </div>
+      <div class="form-group"><label>Amount (USD)</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
+      <input type="hidden" id="f_currency" value="USD">
     </div>
     <div class="grid-2">
       <div class="form-group"><label>Payment Method</label>
         <select id="f_method">
-          <option value="cash">Cash</option><option value="ecocash">EcoCash</option>
-          <option value="bank_transfer">Bank Transfer</option><option value="rtgs">RTGS</option>
+          <option value="cash">Cash</option>
+          <option value="ecocash">EcoCash</option>
           <option value="zipit">Zipit</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="cheque">Cheque</option>
         </select>
       </div>
       <div class="form-group"><label>Payment Date</label><input id="f_paydate" type="date"></div>
@@ -87,51 +155,69 @@
 <script src="../js/shared.js"></script>
 <script>
 requireAuth(); buildSidebar('payments');
-let currentPage = 1;
-const user = getUser();
-const canDelete = ['admin','accountant'].includes(user?.role);
 
-// Pre-fill payment date with today when modal opens
-function openAddModal() {
-  document.getElementById('f_rpacct').value  = '';
-  document.getElementById('f_invid').value   = '';
-  document.getElementById('f_amount').value  = '';
-  document.getElementById('f_notes').value   = '';
-  document.getElementById('f_paydate').value = new Date().toISOString().slice(0, 10);
-  openModal('addModal');
+const TABS = ['payments', 'reconciliation'];
+let pmtCurrentPage  = 1;
+let reconCurrentPage = 0;
+const RECON_PAGE_SIZE = 50;
+let trendChart = null;
+let _pmtDebounce = null;
+let _filterRatepayerId = null;
+const currentUser = getUser();
+const canDelete = ['admin', 'accountant'].includes(currentUser?.role);
+const fmtAmt = v => '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  TABS.forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('pane-' + t).style.display = t === tab ? '' : 'none';
+  });
+  renderTopbarActions(tab);
+  if (tab === 'payments')       loadPayments();
+  if (tab === 'reconciliation') loadReconData();
 }
 
-(function() {
-  const p = getUrlParams();
-  if (p.ratepayer_id) {
-    window._filterRatepayerId = parseInt(p.ratepayer_id);
-    apiFetch(`/api/ratepayers/${p.ratepayer_id}`)
-      .then(rp => { document.querySelector('.topbar-title').textContent = `Payments — ${rp.account_number} (${rp.full_name})`; })
-      .catch(() => {});
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'payments') {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=csv','payments.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=xlsx','payments.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Payment Records','pmtTable','payments.pdf')">⬇ PDF</button>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Record Payment</button>`;
+  } else {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="loadReconData()">↻ Refresh</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=csv','payments.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/payments?format=xlsx','payments.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Payment Reconciliation','reconTable','reconciliation.pdf')">⬇ PDF</button>
+      <button class="btn btn-primary" onclick="bulkReconcile()">✓ Reconcile All Unreconciled</button>`;
   }
-})();
+}
 
-let _debounceTimer = null;
-function debounceLoad() {
-  clearTimeout(_debounceTimer);
-  _debounceTimer = setTimeout(() => loadPayments(1), 350);
+// ── Payments tab ──────────────────────────────────────────────────────────────
+function debouncePayments() {
+  clearTimeout(_pmtDebounce);
+  _pmtDebounce = setTimeout(() => loadPayments(1), 350);
 }
 
 async function loadPayments(page = 1) {
-  currentPage = page;
-  const recon  = document.getElementById('reconFilter').value;
-  const search = document.getElementById('searchInput').value.trim();
-  const skip   = (page-1)*30;
+  pmtCurrentPage = page;
+  const recon  = document.getElementById('pmtReconFilter').value;
+  const search = document.getElementById('pmtSearch').value.trim();
+  const skip   = (page - 1) * 30;
+  const tbody  = document.getElementById('pmtTable');
   try {
     let url = `/api/payments?skip=${skip}&limit=30`;
     if (recon !== '') url += `&reconciled=${recon}`;
-    if (search) url += `&search=${encodeURIComponent(search)}`;
-    if (window._filterRatepayerId) url += `&ratepayer_id=${window._filterRatepayerId}`;
+    if (search)       url += `&search=${encodeURIComponent(search)}`;
+    if (_filterRatepayerId) url += `&ratepayer_id=${_filterRatepayerId}`;
     const data = await apiFetch(url);
-    document.getElementById('countBadge').textContent = `${data.total} payments`;
-    const tbody = document.getElementById('pmtTable');
-    if (data.items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
+    document.getElementById('pmtCountBadge').textContent = `${data.total} payments`;
+    if (!data.items.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">💳</div><p>No payments found</p></div></td></tr>`;
+      renderPagination('pmtPagination', 0, 30, 1, 'loadPayments');
       return;
     }
     tbody.innerHTML = data.items.map(p => `
@@ -143,37 +229,29 @@ async function loadPayments(page = 1) {
         </td>
         <td class="fw-bold text-success">${fmtMoney(p.amount)}</td>
         <td><span class="badge badge-info">${p.payment_method}</span></td>
-        <td>${p.currency}</td>
         <td style="font-size:12.5px;color:var(--text2)">${fmtDate(p.payment_date)}</td>
         <td>${p.is_reconciled ? '<span class="badge badge-paid">Yes</span>' : '<span class="badge badge-overdue">No</span>'}</td>
         <td>${anomalyBadge(p.anomaly_flag)}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-sm btn-secondary" onclick="printReceipt(${JSON.stringify(p).replace(/"/g,'&quot;')})">🖨 Receipt</button>
           <button class="btn btn-sm btn-secondary" onclick="printStatement(${p.ratepayer_id})">Statement</button>
-          ${!p.is_reconciled ? `<button class="btn btn-sm btn-secondary" onclick="reconcile(${p.id})">Reconcile</button>` : ''}
+          ${!p.is_reconciled ? `<button class="btn btn-sm btn-secondary" onclick="reconcileOne(${p.id})">Reconcile</button>` : ''}
           ${canDelete && !p.is_reconciled ? `<button class="btn btn-sm btn-danger" onclick="deletePayment(${p.id},'${p.receipt_number}')">Delete</button>` : ''}
         </td>
       </tr>`).join('');
-    renderPagination('pagination', data.total, 30, page, 'loadPayments');
-  } catch(e) { toast(e.message, 'error'); }
+    renderPagination('pmtPagination', data.total, 30, page, 'loadPayments');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">${e.message}</td></tr>`;
+  }
 }
 
-async function reconcile(id) {
-  try {
-    await apiPatch(`/api/payments/${id}/reconcile`);
-    toast('Payment reconciled', 'success');
-    loadPayments(currentPage);
-  } catch(e) { toast(e.message, 'error'); }
-}
-
-async function deletePayment(id, receipt) {
-  await confirmDelete(`Delete payment ${receipt}?\n\nThis will reverse any amounts credited to the linked invoice.`, async () => {
-    try {
-      await apiDelete(`/api/payments/${id}`);
-      toast('Payment deleted', 'success');
-      loadPayments(currentPage);
-    } catch(e) { toast(e.message, 'error'); }
-  });
+function openAddModal() {
+  document.getElementById('f_rpacct').value  = '';
+  document.getElementById('f_invid').value   = '';
+  document.getElementById('f_amount').value  = '';
+  document.getElementById('f_notes').value   = '';
+  document.getElementById('f_paydate').value = new Date().toISOString().slice(0, 10);
+  openModal('addModal');
 }
 
 async function recordPayment() {
@@ -185,25 +263,34 @@ async function recordPayment() {
     const rp = (lookup.items || lookup)[0];
     if (!rp) { toast(`No ratepayer found for account "${acct}"`, 'warning'); return; }
     const invid = document.getElementById('f_invid').value;
-    const data = {
+    const res = await apiPost('/api/payments', {
       ratepayer_id:   rp.id,
       invoice_id:     invid ? parseInt(invid) : null,
       amount,
-      currency:       document.getElementById('f_currency').value,
+      currency:       'USD',
       payment_method: document.getElementById('f_method').value,
       payment_date:   document.getElementById('f_paydate').value || new Date().toISOString().slice(0, 10),
       notes:          document.getElementById('f_notes').value,
-    };
-    const res = await apiPost('/api/payments', data);
+    });
     toast(`Receipt ${res.receipt_number} issued for ${rp.full_name}`, 'success');
     closeModal('addModal');
     loadPayments();
   } catch(e) { toast(e.message, 'error'); }
 }
 
+async function deletePayment(id, receipt) {
+  await confirmDelete(`Delete payment ${receipt}?\n\nThis will reverse any amounts credited to the linked invoice.`, async () => {
+    try {
+      await apiDelete(`/api/payments/${id}`);
+      toast('Payment deleted', 'success');
+      loadPayments(pmtCurrentPage);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
 function printReceipt(p) {
   const w = window.open('', '_blank', 'width=640,height=800');
-  const methodLabel = {cash:'Cash',ecocash:'EcoCash',bank_transfer:'Bank Transfer',rtgs:'RTGS',zipit:'Zipit'}[p.payment_method] || p.payment_method;
+  const methodLabel = {cash:'Cash',ecocash:'EcoCash',zipit:'Zipit',bank_transfer:'Bank Transfer',cheque:'Cheque'}[p.payment_method] || p.payment_method;
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Receipt ${p.receipt_number}</title>
   <style>
@@ -217,8 +304,7 @@ function printReceipt(p) {
     .rcpt-sub{font-size:12px;color:#555;margin-bottom:20px}
     .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee;font-size:13px}
     .row:last-child{border-bottom:none}
-    .row .label{color:#666}
-    .row .value{font-weight:600}
+    .row .label{color:#666} .row .value{font-weight:600}
     .amount-box{background:#eef7f0;border:2px solid #27ae60;border-radius:8px;padding:14px;text-align:center;margin:20px 0}
     .amount-box .amt{font-size:32px;font-weight:700;color:#27ae60}
     .amount-box .cur{font-size:13px;color:#555;margin-top:2px}
@@ -233,13 +319,13 @@ function printReceipt(p) {
   <div class="rcpt-title">${p.receipt_number}</div>
   <div class="rcpt-sub">Payment Date: ${p.payment_date}</div>
   <div class="amount-box">
-    <div class="amt">${p.currency} ${Number(p.amount).toFixed(2)}</div>
+    <div class="amt">USD ${Number(p.amount).toFixed(2)}</div>
     <div class="cur">Amount Received</div>
   </div>
   <div class="row"><span class="label">Received From</span><span class="value">${p.ratepayer_name}</span></div>
   <div class="row"><span class="label">Account Number</span><span class="value">${p.account_number}</span></div>
   <div class="row"><span class="label">Payment Method</span><span class="value">${methodLabel}</span></div>
-  <div class="row"><span class="label">Currency</span><span class="value">${p.currency}</span></div>
+  <div class="row"><span class="label">Currency</span><span class="value">USD</span></div>
   <div class="row"><span class="label">Reconciled</span><span class="value"><span class="recon-badge">${p.is_reconciled ? 'Yes' : 'Pending'}</span></span></div>
   ${p.invoice_id ? `<div class="row"><span class="label">Invoice Reference</span><span class="value">#${p.invoice_id}</span></div>` : ''}
   <div class="footer">City of Harare FMS &nbsp;|&nbsp; Printed: ${new Date().toLocaleString('en-GB')} &nbsp;|&nbsp; This is an official receipt. Retain for your records.</div>
@@ -252,19 +338,180 @@ function printReceipt(p) {
 
 async function printStatement(ratepayerId) {
   try {
-    const token = getToken();
     const res = await fetch(`${API}/api/ratepayers/${ratepayerId}/statement`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${getToken()}` }
     });
     if (!res.ok) { toast('Could not load statement', 'error'); return; }
-    const html = await res.text();
     const w = window.open('', '_blank', 'width=800,height=900');
-    w.document.write(html);
+    w.document.write(await res.text());
     w.document.close();
   } catch(e) { toast(e.message, 'error'); }
 }
 
-loadPayments();
+// ── Reconciliation tab ────────────────────────────────────────────────────────
+async function loadReconData() {
+  try {
+    await Promise.all([loadReconciliation(), loadTrend()]);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function loadReconciliation() {
+  const statusFilter = document.getElementById('reconFilter').value;
+  let url = `/api/reconciliation?skip=${reconCurrentPage * RECON_PAGE_SIZE}&limit=${RECON_PAGE_SIZE}`;
+  if (statusFilter === 'false') url += '&status=unreconciled';
+  if (statusFilter === 'true')  url += '&status=reconciled';
+
+  const data = await apiFetch(url);
+  const s    = data.summary;
+
+  document.getElementById('kvTotal').textContent   = s.total_payments;
+  document.getElementById('kvRecon').textContent   = s.reconciled_count;
+  document.getElementById('kvUnrecon').textContent = s.unreconciled_count;
+  document.getElementById('kvAmt').textContent     = fmtAmt(s.unreconciled_amount);
+  document.getElementById('kvRate').textContent    = s.reconciliation_rate + '%';
+
+  const rate = s.reconciliation_rate;
+  document.getElementById('progressFill').style.width      = rate + '%';
+  document.getElementById('progressFill').style.background =
+    rate >= 80 ? 'var(--success)' : rate >= 50 ? 'var(--warning)' : 'var(--danger)';
+  document.getElementById('progressLabel').textContent =
+    `${rate}% reconciled (${s.reconciled_count} / ${s.total_payments})`;
+  document.getElementById('progressSub').textContent = s.unreconciled_count > 0
+    ? `${s.unreconciled_count} payment(s) totalling ${fmtAmt(s.unreconciled_amount)} require reconciliation. ` +
+      `Estimated leakage exposure from unreconciled cash: ${fmtAmt(s.leakage_exposure)} (ACFE, 2022 — 40% weight).`
+    : 'All payments are reconciled. Leakage risk from unreconciled cash is zero.';
+
+  const bulkBar = document.getElementById('bulkBar');
+  if (s.unreconciled_count > 0) {
+    bulkBar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = s.unreconciled_count;
+    document.getElementById('bulkAmt').textContent   = fmtAmt(s.unreconciled_amount);
+  } else {
+    bulkBar.style.display = 'none';
+  }
+
+  const items = data.items || [];
+  document.getElementById('reconCountBadge').textContent = `${data.total} payment(s)`;
+  const tbody = document.getElementById('reconTable');
+
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted" style="padding:32px">No payments found</td></tr>';
+    document.getElementById('reconPagination').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = items.map((p, i) => `
+    <tr>
+      <td>${reconCurrentPage * RECON_PAGE_SIZE + i + 1}</td>
+      <td><code style="font-size:11px">${p.receipt_number}</code></td>
+      <td>
+        ${p.ratepayer_name}<br>
+        <span style="font-size:11px;color:var(--text2)">${p.account_number}</span>
+      </td>
+      <td style="font-weight:600">${fmtAmt(p.amount)}</td>
+      <td>${p.payment_method}</td>
+      <td>${p.payment_date}</td>
+      <td>
+        ${p.is_reconciled
+          ? `<span class="badge-recon">Reconciled</span>
+             <div style="font-size:10px;color:var(--text3);margin-top:2px">${p.reconciled_by || ''} ${p.reconciled_at ? '· ' + p.reconciled_at : ''}</div>`
+          : '<span class="badge-unrecon">Unreconciled</span>'}
+      </td>
+      <td>${anomalyBadge(p.anomaly_flag)}</td>
+      <td>
+        ${!p.is_reconciled
+          ? `<button class="btn btn-primary" style="font-size:11.5px;padding:4px 10px" onclick="reconcileOne(${p.id})">Reconcile</button>`
+          : '<span style="color:var(--text3);font-size:12px">Done</span>'}
+      </td>
+    </tr>`).join('');
+
+  renderPagination('reconPagination', data.total, RECON_PAGE_SIZE, reconCurrentPage,
+    p => { reconCurrentPage = p; loadReconciliation(); });
+}
+
+async function loadTrend() {
+  const data      = await apiFetch('/api/reports/collection-rate-trend?months=12');
+  const labels    = data.map(d => d.month);
+  const billed    = data.map(d => d.billed);
+  const collected = data.map(d => d.collected);
+  const rates     = data.map(d => d.collection_rate);
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Billed (USD)',        data: billed,    backgroundColor: 'rgba(59,125,216,0.25)', borderColor: '#3b7dd8', borderWidth: 1.5, yAxisID: 'y' },
+        { label: 'Collected (USD)',      data: collected, backgroundColor: 'rgba(39,174,96,0.3)',  borderColor: '#27ae60', borderWidth: 1.5, yAxisID: 'y' },
+        { label: 'Collection Rate (%)', data: rates,     type: 'line', borderColor: '#c9a84c',
+          backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: 'var(--text1)', font: { size: 11 } } } },
+      scales: {
+        y:  { beginAtZero: true, ticks: { color: 'var(--text2)', callback: v => '$' + v.toLocaleString() }, grid: { color: 'var(--border)' } },
+        y1: { position: 'right', beginAtZero: true, max: 100, ticks: { color: 'var(--text2)', callback: v => v + '%' }, grid: { drawOnChartArea: false } },
+        x:  { ticks: { color: 'var(--text2)' }, grid: { color: 'var(--border)' } }
+      }
+    }
+  });
+}
+
+async function reconcileOne(id) {
+  try {
+    await apiPatch(`/api/payments/${id}/reconcile`);
+    toast('Payment reconciled', 'success');
+    loadPayments(pmtCurrentPage);
+    if (document.getElementById('pane-reconciliation').style.display !== 'none') loadReconciliation();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function bulkReconcile() {
+  if (!confirm('Reconcile ALL unreconciled payments? This action will be logged in the audit trail.')) return;
+  try {
+    const result = await apiFetch('/api/payments/reconcile-all', { method: 'POST' });
+    toast(`${result.reconciled} payment(s) reconciled`, 'success');
+    loadReconData();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(function() {
+  const p = getUrlParams();
+  if (p.ratepayer_id) {
+    _filterRatepayerId = parseInt(p.ratepayer_id);
+    apiFetch(`/api/ratepayers/${p.ratepayer_id}`)
+      .then(rp => { document.getElementById('topbarTitle') && (document.querySelector('.topbar-title').textContent = `Payments — ${rp.account_number} (${rp.full_name})`); })
+      .catch(() => {});
+  }
+  switchTab(p.tab || 'payments');
+})();
 </script>
+<style>
+.tab-btn {
+  background: none; border: none; border-bottom: 3px solid transparent;
+  padding: 8px 18px; font-size: 13px; font-weight: 500; cursor: pointer;
+  color: var(--text2); transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -2px;
+}
+.tab-btn:hover { color: var(--text1); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.recon-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
+.recon-kpi { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:18px 16px; text-align:center; }
+.recon-kpi .kv { font-size:22px; font-weight:700; margin-bottom:4px; }
+.recon-kpi .kl { font-size:11.5px; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; }
+.kv-green { color:var(--success); } .kv-red { color:var(--danger); }
+.kv-blue  { color:var(--primary-light); } .kv-warn { color:var(--warning); }
+.progress-bar-wrap { background:var(--bg3); border-radius:8px; height:10px; overflow:hidden; margin:8px 0 4px; }
+.progress-bar-fill { height:100%; border-radius:8px; transition:width .5s ease; }
+.filter-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; padding: 0 16px; }
+.badge-recon   { background:rgba(39,174,96,.15);  color:var(--success); border:1px solid rgba(39,174,96,.3);  padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+.badge-unrecon { background:rgba(231,76,60,.12); color:var(--danger);  border:1px solid rgba(231,76,60,.3); padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+.bulk-bar { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
+.bulk-bar .bulk-info { flex:1; font-size:13px; color:var(--text2); }
+.bulk-bar .bulk-info strong { color:var(--text1); }
+</style>
 </body>
 </html>

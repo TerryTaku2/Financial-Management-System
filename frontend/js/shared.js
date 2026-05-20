@@ -139,19 +139,13 @@ function buildSidebar(activePage) {
   const navItems = [
     { label: 'Dashboard',        icon: '▪', page: 'dashboard',    href: 'dashboard.html',    roles: [] },
     { label: 'Ratepayers',       icon: '▪', page: 'ratepayers',   href: 'ratepayers.html',   roles: [] },
-    { label: 'Invoices',         icon: '▪', page: 'invoices',     href: 'invoices.html',     roles: [] },
-    { label: 'Billing',          icon: '▪', page: 'billing',      href: 'billing.html',      roles: [] },
+    { label: 'Billing & Invoices', icon: '▪', page: 'billing',    href: 'billing.html',      roles: [] },
     { label: 'Payments',         icon: '▪', page: 'payments',     href: 'payments.html',     roles: [] },
-    { label: 'Expenditure',      icon: '▪', page: 'expenditures', href: 'expenditures.html', roles: [] },
-    { label: 'Budget',           icon: '▪', page: 'budget',       href: 'budget.html',       roles: [] },
-    { label: 'Leakage Monitor',  icon: '▪', page: 'leakage',      href: 'leakage.html',      roles: [] },
-    { label: 'Reconciliation',    icon: '▪', page: 'reconciliation', href: 'reconciliation.html', roles: [] },
-    { label: 'Audit Trail',      icon: '▪', page: 'audit',        href: 'audit.html',        roles: ['admin','auditor'] },
-    { label: 'Management Report', icon: '▪', page: 'management_report', href: 'management_report.html', roles: ['admin','auditor','accountant','budget_officer'] },
-    { label: 'Reports',          icon: '▪', page: 'reports',      href: 'reports.html',      roles: ['admin','auditor','accountant','budget_officer'] },
-    { label: 'Aging Analysis',   icon: '▪', page: 'aging',        href: 'aging.html',        roles: [] },
-    { label: 'Chart Generator',  icon: '▪', page: 'charts',       href: 'charts.html',       roles: [] },
-    { label: 'User Management',  icon: '▪', page: 'users',        href: 'users.html',        roles: ['admin'] },
+    { label: 'Budget & Expenditure', icon: '▪', page: 'budget',   href: 'budget.html',       roles: [] },
+    { label: 'Leakage & Audit',  icon: '▪', page: 'leakage',      href: 'leakage.html',      roles: [] },
+    { label: 'Analytics',        icon: '▪', page: 'analytics',    href: 'analytics.html',    roles: [] },
+    { label: 'Reports Hub',       icon: '▪', page: 'reports',      href: 'reports.html',      roles: ['admin','auditor','accountant','budget_officer'] },
+    { label: 'Administration',   icon: '▪', page: 'admin',        href: 'admin.html',        roles: ['admin'] },
   ];
 
   const allowed = navItems.filter(n => n.roles.length === 0 || n.roles.includes(role));

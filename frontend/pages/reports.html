@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Reports &amp; Data Entry — City of Harare FMS</title>
+<title>Reports Hub — City of Harare FMS</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -120,6 +120,72 @@
 
 /* ── Panel pages ───────────────────────────────────────────── */
 .rpt-panel { display: none; } .rpt-panel.active { display: block; }
+
+/* ── Management Report ─────────────────────────────────── */
+.mgmt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+.mgmt-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.mgmt-kpi .kv{font-size:22px;font-weight:700;margin-bottom:4px}
+.mgmt-kpi .kl{font-size:10.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em}
+.kv-blue{color:var(--primary-light)}.kv-green{color:var(--success)}.kv-red{color:var(--danger)}.kv-warn{color:var(--warning)}
+.mg-section-title{font-size:12.5px;font-weight:700;color:var(--text1);margin:16px 0 8px;border-bottom:1px solid var(--border);padding-bottom:5px}
+.cat-table{width:100%;border-collapse:collapse;font-size:12px}
+.cat-table th{background:var(--bg3);color:var(--text2);font-size:9.5px;text-transform:uppercase;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border)}
+.cat-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text1)}
+.cat-table tr:last-child td{border-bottom:none;font-weight:700;background:var(--bg3)}
+.rate-bar{display:inline-block;height:5px;border-radius:3px;margin-left:5px;vertical-align:middle}
+.mg-alert-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.alert-chip{padding:6px 11px;border-radius:6px;font-size:12px;font-weight:600}
+.chip-red{background:rgba(192,57,43,.15);color:#c0392b;border:1px solid rgba(192,57,43,.3)}
+.chip-warn{background:rgba(230,126,34,.15);color:#e67e22;border:1px solid rgba(230,126,34,.3)}
+.chip-green{background:rgba(39,174,96,.15);color:var(--success);border:1px solid rgba(39,174,96,.3)}
+.forecast-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px;margin-top:6px}
+.fc-card{background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:10px;text-align:center}
+.fc-month{font-size:10.5px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.fc-receipts{font-size:13px;font-weight:700;color:var(--success)}.fc-payments{font-size:11.5px;color:var(--danger);margin-top:2px}
+.fc-net{font-size:10.5px;margin-top:3px;font-weight:600}
+
+/* ── COH Financial Report ──────────────────────────────── */
+.fr-wrap{background:#fff;color:#111;font-family:'DM Sans',sans-serif;font-size:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;overflow:hidden}
+.fr-doc-header{text-align:center;padding:12px 18px 8px;border-bottom:2px solid #1f3864}
+.fr-doc-header h2{font-family:'Crimson Pro',serif;font-size:17px;font-weight:700;color:#1f3864;margin:0;letter-spacing:.04em}
+.fr-doc-header h3{font-family:'Crimson Pro',serif;font-size:14px;font-weight:600;color:#1f3864;margin:2px 0 0}
+.fr-table{width:100%;border-collapse:collapse;font-size:11px}
+.fr-table th{background:#1f3864;color:#fff;font-weight:600;padding:6px 8px;text-align:right;white-space:nowrap;border:1px solid #2a4a7f}
+.fr-table th:first-child{text-align:left}.fr-table th.th-notes{width:40px;text-align:center}
+.fr-table td{padding:3px 8px;border-bottom:1px solid #e8eaed;vertical-align:middle}
+.fr-table td.td-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fr-table td.td-note{text-align:center;color:#666;font-size:10px;width:40px}
+.fr-section td{background:#dce3f0;font-weight:700;font-size:12px;color:#1f3864;padding:5px 8px;border-top:2px solid #1f3864;border-bottom:1px solid #b0bdd4;letter-spacing:.02em}
+.fr-subsection td{background:#f0f3f8;font-weight:600;color:#2a4a7f;padding:3px 8px 3px 20px;font-style:italic;border-bottom:1px solid #d8dde8}
+.fr-data td{background:#fff}.fr-data.alt td{background:#f9fafb}.fr-data td:first-child{padding-left:24px}
+.fr-total td{background:#eef1f7;font-weight:700;border-top:1px solid #b0bdd4;border-bottom:1px solid #b0bdd4}.fr-total td:first-child{padding-left:24px}
+.fr-major td{background:#d0d9ec;font-weight:700;font-size:12px;color:#1f3864;border-top:2.5px solid #1f3864;border-bottom:2px solid #1f3864}
+.fr-zero{color:#bbb}
+.fr-disclosure{font-size:10px;font-style:italic;color:#555;text-align:center;padding:7px 14px 10px;border-top:1px solid #dde;background:#f9fafb}
+.fr-drill{color:inherit;text-decoration:none;display:flex;align-items:center;gap:4px}
+.fr-drill:hover{color:#1f3864;text-decoration:underline}
+.fr-drill::after{content:'↗';font-size:9px;color:#6b8cba;opacity:0;transition:opacity .15s}
+.fr-data:hover .fr-drill::after{opacity:1}.fr-data:hover td{background:#f0f4ff!important}
+.fr-tab-btns{display:flex;gap:3px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.fr-tab{padding:4px 11px;font-size:11.5px;cursor:pointer;background:var(--bg2);border:none;color:var(--text2);font-weight:500;transition:all .15s}
+.fr-tab.active{background:#1f3864;color:#fff}
+.fr-crossnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;align-items:center}
+.fr-crossnav-label{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-right:3px}
+.fr-nav-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text1);text-decoration:none;transition:all .15s}
+.fr-nav-chip:hover{background:#1f3864;color:#fff;border-color:#1f3864}
+.fr-nav-chip .chip-icon{font-size:12px}
+.fr-section-wrap{display:none}.fr-section-wrap.visible{display:block}
+
+@media print {
+  .sidebar,.topbar,.btn,.fr-crossnav,.rpt-nav,#toast-container,.no-print{display:none!important}
+  .app-layout{display:block!important}.main-content{margin:0!important;padding:0!important}
+  .rpt-layout{display:block!important;height:auto!important}.rpt-content{padding:0!important}
+  body{background:#fff!important;color:#000!important;font-size:10pt}
+  .fr-wrap{border:none;border-radius:0;margin-bottom:0}
+  .fr-section-wrap{display:block!important;page-break-before:always}.fr-section-wrap:first-of-type{page-break-before:auto}
+  .fr-table{font-size:8.5pt}.rpt-panel{display:block!important}
+  .mgmt-kpi{border:1px solid #ccc!important;background:#f9f9f9!important}.cat-table{font-size:9pt}
+}
 </style>
 </head>
 <body>
@@ -127,7 +193,7 @@
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
     <div class="topbar">
-      <span class="topbar-title">Reports &amp; Data Entry</span>
+      <span class="topbar-title">Reports Hub</span>
       <div class="topbar-right">
         <button class="btn btn-secondary btn-sm" onclick="importCOHDataset()" title="Import City of Harare official financial dataset (2021-2025)">📥 Load COH Data</button>
         <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/full-backup?format=xlsx','fms_full_backup.xlsx')">⬇ Full Backup Excel</button>
@@ -153,6 +219,10 @@
         <div class="rpt-nav-section">Expenditure</div>
         <button class="rpt-nav-item" data-panel="variance" onclick="showPanel('variance',this)"><span class="ni">📋</span>Budget Variance</button>
         <button class="rpt-nav-item" data-panel="cashflow" onclick="showPanel('cashflow',this)"><span class="ni">🔄</span>Cashflow Forecast</button>
+
+        <div class="rpt-nav-section">Management</div>
+        <button class="rpt-nav-item" data-panel="mgmt" onclick="showPanel('mgmt',this)"><span class="ni">📈</span>Management Report</button>
+        <button class="rpt-nav-item" data-panel="coh"  onclick="showPanel('coh',this)"><span class="ni">📄</span>COH Financial</button>
 
         <div class="rpt-nav-section">Settings</div>
         <button class="rpt-nav-item" data-panel="budgets" onclick="showPanel('budgets',this)"><span class="ni">🏛</span>Budgets</button>
@@ -198,7 +268,7 @@
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div class="block">
-              <div class="block-head"><span class="block-title">Recent Invoices</span><a class="btn btn-secondary btn-sm" href="invoices.html">View All</a></div>
+              <div class="block-head"><span class="block-title">Recent Invoices</span><a class="btn btn-secondary btn-sm" href="billing.html">View All</a></div>
               <div class="block-body rtw" id="ov-invoices"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
             </div>
             <div class="block">
@@ -209,7 +279,7 @@
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
             <div class="block">
-              <div class="block-head"><span class="block-title">Recent Expenditures</span><a class="btn btn-secondary btn-sm" href="expenditures.html">View All</a></div>
+              <div class="block-head"><span class="block-title">Recent Expenditures</span><a class="btn btn-secondary btn-sm" href="budget.html?tab=expenditures">View All</a></div>
               <div class="block-body rtw" id="ov-expenditures"><div class="text-muted text-center" style="padding:16px;font-size:12px">Loading…</div></div>
             </div>
             <div class="block">
@@ -315,7 +385,7 @@
                 <div class="form-group" style="max-width:500px"><label>Description</label><input id="inv_desc" placeholder="Brief description"></div>
                 <div class="frow">
                   <button class="btn btn-primary" onclick="saveInvoice()">Save Invoice</button>
-                  <a class="btn btn-secondary" href="invoices.html">View All Invoices</a>
+                  <a class="btn btn-secondary" href="billing.html">View All Invoices</a>
                 </div>
                 <div id="inv_rp_info" style="margin-top:8px;font-size:11.5px;color:var(--text2)"></div>
               </div>
@@ -333,7 +403,13 @@
                   <div class="form-group"><label>Amount (USD) *</label><input id="pmt_amt" type="number" step="0.01" placeholder="0.00"></div>
                   <div class="form-group"><label>Payment Date *</label><input id="pmt_date" type="date"></div>
                   <div class="form-group"><label>Method</label>
-                    <select id="pmt_method"><option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="mobile_money">Mobile Money</option><option value="cheque">Cheque</option></select>
+                    <select id="pmt_method">
+                      <option value="cash">Cash</option>
+                      <option value="ecocash">EcoCash</option>
+                      <option value="zipit">Zipit</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="cheque">Cheque</option>
+                    </select>
                   </div>
                   <div class="form-group"><label>Revenue Category</label>
                     <select id="pmt_cat">
@@ -361,8 +437,15 @@
                   <div class="form-group"><label>Reference Number *</label><input id="exp_ref" placeholder="e.g. EXP-2025-001"></div>
                   <div class="form-group"><label>Department *</label>
                     <select id="exp_dept">
-                      <option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option>
-                      <option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option>
+                      <option value="Town Clerk Department">Town Clerk Department</option>
+                      <option value="Chamber Secretary">Chamber Secretary</option>
+                      <option value="Harare Water Department">Harare Water Department</option>
+                      <option value="City Health Department">City Health Department</option>
+                      <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+                      <option value="Department of Works">Department of Works</option>
+                      <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+                      <option value="Urban Planning Department">Urban Planning Department</option>
+                      <option value="Finance Department">Finance Department</option>
                     </select>
                   </div>
                   <div class="form-group"><label>Amount (USD) *</label><input id="exp_amt" type="number" step="0.01" placeholder="0.00"></div>
@@ -373,7 +456,7 @@
                 <div class="form-group" style="max-width:500px"><label>Description *</label><input id="exp_desc" placeholder="What this expenditure is for"></div>
                 <div class="frow">
                   <button class="btn btn-primary" onclick="saveExpenditure()">Save Expenditure</button>
-                  <a class="btn btn-secondary" href="expenditures.html">View All Expenditures</a>
+                  <a class="btn btn-secondary" href="budget.html?tab=expenditures">View All Expenditures</a>
                 </div>
               </div>
             </div>
@@ -633,7 +716,17 @@
                 <div class="fgrid">
                   <div class="form-group"><label>Fiscal Year *</label><input id="b_fy" placeholder="e.g. 2025/2026"></div>
                   <div class="form-group"><label>Department *</label>
-                    <select id="b_dept"><option value="Finance">Finance</option><option value="Water &amp;amp; Sanitation">Water &amp; Sanitation</option><option value="Roads">Roads</option><option value="Waste Management">Waste Management</option><option value="Health">Health</option><option value="Human Resources">Human Resources</option><option value="ICT">ICT</option></select>
+                    <select id="b_dept">
+                      <option value="Town Clerk Department">Town Clerk Department</option>
+                      <option value="Chamber Secretary">Chamber Secretary</option>
+                      <option value="Harare Water Department">Harare Water Department</option>
+                      <option value="City Health Department">City Health Department</option>
+                      <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+                      <option value="Department of Works">Department of Works</option>
+                      <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+                      <option value="Urban Planning Department">Urban Planning Department</option>
+                      <option value="Finance Department">Finance Department</option>
+                    </select>
                   </div>
                   <div class="form-group"><label>Category</label><input id="b_cat" placeholder="e.g. Operational"></div>
                   <div class="form-group"><label>Allocated (USD) *</label><input id="b_alloc" type="number" step="0.01" placeholder="0.00"></div>
@@ -736,6 +829,127 @@
           </div>
         </div>
 
+        <!-- ═══════════════════ MANAGEMENT REPORT ════════════ -->
+        <div class="rpt-panel" id="panel-mgmt">
+          <div class="sec-hdr">
+            <div><div class="sec-title">Management Report</div><div class="sec-sub">Consolidated financial performance — revenue, expenditure, officer analytics, and cashflow forecast.</div></div>
+            <div class="sec-actions">
+              <button class="btn btn-secondary btn-sm" onclick="loadMgmt()">↻ Refresh</button>
+              <button class="btn btn-secondary btn-sm no-print" onclick="window.print()">🖨 Print</button>
+              <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/reports/management-summary?format=xlsx','management_report.xlsx')">⬇ Excel</button>
+              <button class="btn btn-secondary btn-sm" onclick="exportManagementPDF()">⬇ PDF</button>
+            </div>
+          </div>
+          <div class="mgmt-grid">
+            <div class="mgmt-kpi"><div class="kv kv-blue" id="mg-kvBilled">—</div><div class="kl">Total Billed (USD)</div></div>
+            <div class="mgmt-kpi"><div class="kv kv-green" id="mg-kvCollected">—</div><div class="kl">Total Collected</div></div>
+            <div class="mgmt-kpi"><div class="kv kv-warn" id="mg-kvOutstanding">—</div><div class="kl">Outstanding Balance</div></div>
+            <div class="mgmt-kpi"><div class="kv kv-red" id="mg-kvLeakage">—</div><div class="kl">Est. Revenue Leakage</div></div>
+            <div class="mgmt-kpi"><div class="kv kv-blue" id="mg-kvRate">—</div><div class="kl">Collection Rate</div></div>
+            <div class="mgmt-kpi"><div class="kv kv-green" id="mg-kvBudget">—</div><div class="kl">Budget Utilisation</div></div>
+          </div>
+          <div class="mg-section-title">Active Leakage Alerts</div>
+          <div class="mg-alert-strip">
+            <span class="alert-chip chip-red" id="mg-chipHigh">—</span>
+            <span class="alert-chip chip-warn" id="mg-chipMedium">—</span>
+            <span class="alert-chip chip-green" id="mg-chipTotal">—</span>
+          </div>
+          <div class="mg-section-title">Revenue Performance by Category</div>
+          <div style="overflow-x:auto">
+            <table class="cat-table">
+              <thead><tr><th>Category</th><th>Billed (USD)</th><th>Collected (USD)</th><th>Outstanding</th><th>Collection Rate</th></tr></thead>
+              <tbody id="mg-catBody"><tr><td colspan="5" class="text-center text-muted" style="padding:16px">Click Refresh to load</td></tr></tbody>
+            </table>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+            <div class="block"><div class="block-head"><span class="block-title">Revenue by Category</span></div><div class="block-body"><canvas id="mgCatChart" height="200"></canvas></div></div>
+            <div class="block"><div class="block-head"><span class="block-title">Monthly Trend (12 months)</span></div><div class="block-body"><canvas id="mgTrendChart" height="200"></canvas></div></div>
+          </div>
+          <div class="mg-section-title">Revenue Officer Performance</div>
+          <div style="overflow-x:auto">
+            <table class="cat-table">
+              <thead><tr><th>Officer</th><th>Total Billed</th><th>Total Collected</th><th>Collection Rate</th><th>Unreconciled</th><th>Z-Score</th><th>Performance</th></tr></thead>
+              <tbody id="mg-officerBody"><tr><td colspan="7" class="text-center text-muted" style="padding:16px">—</td></tr></tbody>
+            </table>
+          </div>
+          <div class="mg-section-title">3-Month Cashflow Forecast</div>
+          <div class="forecast-row" id="mg-forecastGrid"></div>
+          <p style="font-size:11px;color:var(--text2);margin-top:6px" id="mg-forecastBasis"></p>
+          <div class="mg-section-title">Budget Variance</div>
+          <div style="overflow-x:auto">
+            <table class="cat-table">
+              <thead><tr><th>Department</th><th>Fiscal Year</th><th>Allocated</th><th>Actual Spent</th><th>Variance</th><th>Status</th></tr></thead>
+              <tbody id="mg-budgetBody"><tr><td colspan="6" class="text-center text-muted" style="padding:16px">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ═══════════════════ COH FINANCIAL REPORT ═════════ -->
+        <div class="rpt-panel" id="panel-coh">
+          <div class="sec-hdr">
+            <div><div class="sec-title">COH Financial Report</div><div class="sec-sub">City of Harare IPSAS-compliant revenue and expenditure statement by period.</div></div>
+            <div class="sec-actions">
+              <label style="font-size:12px;color:var(--text2)">Period:</label>
+              <select id="fr-selMonth" style="padding:4px 8px;font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;color:var(--text1)">
+                <option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option>
+                <option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+              </select>
+              <select id="fr-selYear" style="padding:4px 8px;font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;color:var(--text1)"></select>
+              <button class="btn btn-secondary btn-sm" onclick="loadFR()">Generate</button>
+              <button class="btn btn-secondary btn-sm no-print" onclick="window.print()">🖨 Print</button>
+              <button class="btn btn-primary btn-sm" onclick="frShowBoth()">Show Both</button>
+              <div class="fr-tab-btns">
+                <button class="fr-tab active" id="fr-tabRevenue" onclick="frSwitchTab('revenue')">Revenue</button>
+                <button class="fr-tab" id="fr-tabExpenditure" onclick="frSwitchTab('expenditure')">Expenditure</button>
+              </div>
+            </div>
+          </div>
+          <div class="fr-crossnav no-print" id="fr-crossNav">
+            <span class="fr-crossnav-label">Jump to:</span>
+            <a class="fr-nav-chip" id="fr-navBudget"       href="#"><span class="chip-icon">📋</span> Budget Overview</a>
+            <a class="fr-nav-chip" id="fr-navInvoices"     href="#"><span class="chip-icon">🧾</span> All Invoices</a>
+            <a class="fr-nav-chip" id="fr-navPayments"     href="#"><span class="chip-icon">💳</span> Payments</a>
+            <a class="fr-nav-chip" id="fr-navExpenditures" href="#"><span class="chip-icon">💸</span> Expenditures</a>
+            <a class="fr-nav-chip" id="fr-navReports"      href="reports.html"><span class="chip-icon">📊</span> Reports Hub</a>
+            <span style="margin-left:auto;font-size:11px;color:var(--text3)" id="fr-crossNavInfo"></span>
+          </div>
+          <div class="fr-section-wrap visible" id="fr-secRevenue">
+            <div class="fr-wrap">
+              <div class="fr-doc-header"><h2>CITY OF HARARE</h2><h3 id="fr-revPeriodTitle">— FINANCIAL REPORT</h3></div>
+              <table class="fr-table">
+                <thead><tr>
+                  <th style="min-width:280px;text-align:left">Item</th>
+                  <th class="th-notes">Notes</th>
+                  <th style="min-width:140px">Annual Budget ZWG</th>
+                  <th style="min-width:135px">Proportionate Budget<br><span id="fr-revMonthHead" style="font-weight:400;font-size:10px"></span></th>
+                  <th style="min-width:130px">Actual Billing<br><span id="fr-revMonthHead2" style="font-weight:400;font-size:10px"></span></th>
+                  <th style="min-width:130px">Actual Revenue<br><span id="fr-revMonthHead3" style="font-weight:400;font-size:10px"></span></th>
+                </tr></thead>
+                <tbody id="fr-revBody"><tr><td colspan="6" style="text-align:center;padding:32px;color:#888">Select a period and click Generate.</td></tr></tbody>
+              </table>
+              <div class="fr-disclosure" id="fr-revDisclosure"></div>
+            </div>
+          </div>
+          <div class="fr-section-wrap" id="fr-secExpenditure">
+            <div class="fr-wrap">
+              <div class="fr-doc-header"><h2>CITY OF HARARE</h2><h3 id="fr-expPeriodTitle">— FINANCIAL REPORT</h3></div>
+              <table class="fr-table">
+                <thead><tr>
+                  <th style="min-width:280px;text-align:left">Item</th>
+                  <th class="th-notes">Notes</th>
+                  <th style="min-width:140px">Annual Budget ZWG</th>
+                  <th style="min-width:135px">Proportionate Budget<br><span id="fr-expMonthHead" style="font-weight:400;font-size:10px"></span></th>
+                  <th style="min-width:130px">Actual Expenditure<br><span id="fr-expMonthHead2" style="font-weight:400;font-size:10px"></span></th>
+                  <th style="min-width:130px">Actual Payment<br><span id="fr-expMonthHead3" style="font-weight:400;font-size:10px"></span></th>
+                </tr></thead>
+                <tbody id="fr-expBody"><tr><td colspan="6" style="text-align:center;padding:32px;color:#888">Select a period and click Generate.</td></tr></tbody>
+              </table>
+              <div class="fr-disclosure" id="fr-expDisclosure"></div>
+            </div>
+          </div>
+        </div>
+
       </div><!-- /rpt-content -->
     </div><!-- /rpt-layout -->
   </div><!-- /main-content -->
@@ -798,7 +1012,7 @@ function showPanel(name, btn) {
   // Auto-load on first visit
   if (!btn.dataset.loaded) {
     btn.dataset.loaded = '1';
-    const autoLoad = { overview: loadOverview, activity: loadActivity, trend: loadTrend };
+    const autoLoad = { overview: loadOverview, activity: loadActivity, trend: loadTrend, mgmt: loadMgmt, coh: loadFR };
     if (autoLoad[name]) autoLoad[name]();
   }
 }
@@ -1362,8 +1576,28 @@ function exportAuditPage(fmt) {
   ['af-from','aud-from'].forEach(id=>$(id).value=startStr);
   ['af-to','aud-to'].forEach(id=>$(id).value=todayStr);
   ['b_fy','t_fy','perf-fy','tgt-fy-filter'].forEach(id=>$(id).value=fy);
-  // Default invoice/payment dates
   ['inv_date','inv_due','pmt_date','exp_date'].forEach(id=>{ if($(id)) $(id).value=todayStr; });
+
+  // FR year selector
+  const frSM = document.getElementById('fr-selMonth');
+  const frSY = document.getElementById('fr-selYear');
+  if (frSM && frSY) {
+    frSM.value = now.getMonth() + 1;
+    for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) {
+      const o = document.createElement('option');
+      o.value = y; o.textContent = y; frSY.appendChild(o);
+    }
+    frSY.value = now.getFullYear();
+  }
+
+  // Panel URL routing
+  const urlP = getUrlParams();
+  if (urlP.month && frSM) frSM.value = urlP.month;
+  if (urlP.year  && frSY) frSY.value  = urlP.year;
+  if (urlP.panel) {
+    const navBtn = document.querySelector(`[data-panel="${urlP.panel}"]`);
+    if (navBtn) { showPanel(urlP.panel, navBtn); return; }
+  }
   loadOverview();
 })();
 
@@ -1386,6 +1620,295 @@ async function importCOHDataset() {
     toast('COH import failed: ' + e.message, 'error');
     const btn = document.querySelector('[onclick="importCOHDataset()"]');
     if (btn) { btn.disabled = false; btn.textContent = '📥 Load COH Data'; }
+  }
+}
+
+// ── MANAGEMENT REPORT ─────────────────────────────────────────────────────────
+let mgCatChart = null, mgTrendChart = null;
+const mgFmt = v => '$' + Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const mgPct = v => Number(v||0).toFixed(1) + '%';
+
+async function loadMgmt() {
+  try {
+    const [summary, trend, officers, forecast, variance] = await Promise.all([
+      apiFetch('/api/reports/management-summary'),
+      apiFetch('/api/reports/collection-rate-trend?months=12'),
+      apiFetch('/api/reports/officer-performance'),
+      apiFetch('/api/reports/cashflow-forecast?months_ahead=3'),
+      apiFetch('/api/reports/budget-variance')
+    ]);
+    const r = summary.revenue;
+    document.getElementById('mg-kvBilled').textContent     = mgFmt(r.total_billed);
+    document.getElementById('mg-kvCollected').textContent  = mgFmt(r.total_collected);
+    document.getElementById('mg-kvOutstanding').textContent= mgFmt(r.total_outstanding);
+    document.getElementById('mg-kvLeakage').textContent    = mgFmt(r.estimated_leakage);
+    document.getElementById('mg-kvRate').textContent       = mgPct(r.collection_rate_pct);
+    document.getElementById('mg-kvBudget').textContent     = mgPct(summary.budget.utilisation_pct);
+    document.getElementById('mg-chipHigh').textContent     = `${summary.alerts.high_severity} High Severity Alerts`;
+    document.getElementById('mg-chipMedium').textContent   = `${summary.alerts.medium_severity} Medium Severity Alerts`;
+    document.getElementById('mg-chipTotal').textContent    = `${summary.alerts.total_active} Total Active`;
+    let totalBilled=0, totalCollected=0, totalOutstanding=0;
+    document.getElementById('mg-catBody').innerHTML = summary.by_category.map(c => {
+      totalBilled += c.billed; totalCollected += c.collected;
+      const out = c.billed - c.collected; totalOutstanding += out;
+      const rc = c.rate >= 70 ? '#27ae60' : c.rate >= 40 ? '#e67e22' : '#c0392b';
+      return `<tr><td style="font-weight:600;text-transform:capitalize">${c.category}</td><td>${mgFmt(c.billed)}</td><td>${mgFmt(c.collected)}</td><td style="color:var(--danger)">${mgFmt(out)}</td><td><span style="color:${rc};font-weight:700">${mgPct(c.rate)}</span><span class="rate-bar" style="width:${Math.min(c.rate,100)}px;background:${rc}"></span></td></tr>`;
+    }).join('') + `<tr><td>TOTAL</td><td>${mgFmt(totalBilled)}</td><td>${mgFmt(totalCollected)}</td><td>${mgFmt(totalOutstanding)}</td><td style="font-weight:700;color:${r.collection_rate_pct>=70?'#27ae60':r.collection_rate_pct>=40?'#e67e22':'#c0392b'}">${mgPct(r.collection_rate_pct)}</td></tr>`;
+    if (mgCatChart) mgCatChart.destroy();
+    mgCatChart = new Chart(document.getElementById('mgCatChart').getContext('2d'), {
+      type:'doughnut',
+      data:{labels:summary.by_category.map(c=>c.category),datasets:[{data:summary.by_category.map(c=>c.collected),backgroundColor:['#3b7dd8','#27ae60','#c9a84c','#c0392b','#8e44ad','#e67e22','#1abc9c','#95a5a6']}]},
+      options:{responsive:true,plugins:{legend:{position:'right',labels:{color:'var(--text1)',font:{size:10}}}}}
+    });
+    if (mgTrendChart) mgTrendChart.destroy();
+    mgTrendChart = new Chart(document.getElementById('mgTrendChart').getContext('2d'), {
+      type:'bar',
+      data:{labels:trend.map(d=>d.month),datasets:[
+        {label:'Billed',    data:trend.map(d=>d.billed),          backgroundColor:'rgba(59,125,216,0.25)',borderColor:'#3b7dd8',borderWidth:1.5,yAxisID:'y'},
+        {label:'Collected', data:trend.map(d=>d.collected),       backgroundColor:'rgba(39,174,96,0.3)',  borderColor:'#27ae60',borderWidth:1.5,yAxisID:'y'},
+        {label:'Rate %',    data:trend.map(d=>d.collection_rate), type:'line',borderColor:'#c9a84c',backgroundColor:'transparent',borderWidth:2,yAxisID:'y1',pointRadius:2}
+      ]},
+      options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'var(--text1)',font:{size:10}}}},
+        scales:{y:{beginAtZero:true,ticks:{color:'var(--text2)',callback:v=>'$'+v.toLocaleString()},grid:{color:'var(--border)'}},
+          y1:{position:'right',beginAtZero:true,max:100,ticks:{color:'var(--text2)',callback:v=>v+'%'},grid:{drawOnChartArea:false}},
+          x:{ticks:{color:'var(--text2)',maxRotation:45},grid:{color:'var(--border)'}}}}
+    });
+    document.getElementById('mg-officerBody').innerHTML = (officers.officers||[]).map(o => {
+      const zc = o.z_score<-1.5?'#c0392b':o.z_score>0.5?'#27ae60':'var(--text2)';
+      const pc = o.performance==='At Risk'?'#c0392b':o.performance==='Above Average'?'#27ae60':'var(--text2)';
+      return `<tr><td><strong>${o.full_name}</strong><br><span style="font-size:11px;color:var(--text2)">${o.username}</span></td><td>${mgFmt(o.total_billed)}</td><td>${mgFmt(o.total_collected)}</td><td style="font-weight:700;color:${o.collection_rate>=60?'#27ae60':o.collection_rate>=30?'#e67e22':'#c0392b'}">${mgPct(o.collection_rate)}</td><td style="color:${o.unreconciled_payments>0?'#c0392b':'#27ae60'}">${o.unreconciled_payments}</td><td style="color:${zc};font-weight:600">${o.z_score}</td><td style="color:${pc};font-weight:600">${o.performance}</td></tr>`;
+    }).join('')||'<tr><td colspan="7" class="text-center text-muted" style="padding:16px">No revenue officers found</td></tr>';
+    document.getElementById('mg-forecastGrid').innerHTML = (forecast.forecast||[]).map(f => {
+      const nc = f.net_cashflow>=0?'#27ae60':'#c0392b';
+      return `<div class="fc-card"><div class="fc-month">${f.month}</div><div class="fc-receipts">${mgFmt(f.expected_receipts)}</div><div style="font-size:10px;color:var(--text2)">Expected receipts</div><div class="fc-payments">(${mgFmt(f.expected_payments)})</div><div style="font-size:10px;color:var(--text2)">Expected payments</div><div class="fc-net" style="color:${nc}">Net: ${mgFmt(f.net_cashflow)}</div></div>`;
+    }).join('');
+    document.getElementById('mg-forecastBasis').textContent = forecast.basis||'';
+    document.getElementById('mg-budgetBody').innerHTML = (variance||[]).map(b => {
+      const vc = b.variance<0?'#c0392b':'#27ae60';
+      return `<tr><td>${b.department}</td><td>${b.fiscal_year}</td><td>${mgFmt(b.allocated)}</td><td>${mgFmt(b.actual_spent)}</td><td style="color:${vc};font-weight:600">${mgFmt(b.variance)}</td><td style="color:${vc};font-weight:600">${b.status}</td></tr>`;
+    }).join('')||'<tr><td colspan="6" class="text-center text-muted" style="padding:16px">No budget data</td></tr>';
+  } catch(e) { toast('Failed to load management report: '+e.message,'error'); }
+}
+
+async function exportManagementPDF() {
+  try {
+    const d = await apiFetch('/api/reports/management-summary?format=json');
+    const rv = d.revenue||{};
+    const cols = ['Section','Metric','Value'];
+    const rows = [
+      ['Revenue','Total Billed',       mgFmt(rv.total_billed)],
+      ['Revenue','Total Collected',    mgFmt(rv.total_collected)],
+      ['Revenue','Collection Rate',    rv.collection_rate_pct+'%'],
+      ['Revenue','Outstanding Balance',mgFmt(rv.total_outstanding)],
+      ['Revenue','Overdue Balance',    mgFmt(rv.overdue_balance)],
+      ['Revenue','Est. Leakage',       mgFmt(rv.estimated_leakage)],
+      ...(d.by_category||[]).map(c=>['By Category',c.category,`Billed: ${mgFmt(c.billed)} | Collected: ${mgFmt(c.collected)} (${c.rate}%)`]),
+      ['Alerts','High Severity',       d.alerts?.high_severity||0],
+      ['Alerts','Medium Severity',     d.alerts?.medium_severity||0],
+      ['Budget','Total Allocated',     mgFmt(d.budget?.total_allocated)],
+      ['Budget','Total Spent',         mgFmt(d.budget?.total_spent)],
+      ['Budget','Utilisation',         (d.budget?.utilisation_pct||0)+'%'],
+      ['Ratepayers','Total',           d.ratepayers?.total||0],
+      ['Ratepayers','Active',          d.ratepayers?.active||0],
+    ];
+    await exportPDF('Management Summary Report',cols,rows,'management_report.pdf',`Generated: ${d.generated_at||''} by ${d.generated_by||''}`);
+  } catch(e) { toast('PDF export failed: '+e.message,'error'); }
+}
+
+// ── COH FINANCIAL REPORT ──────────────────────────────────────────────────────
+const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function frSwitchTab(tab) {
+  document.getElementById('fr-secRevenue').classList.toggle('visible', tab==='revenue');
+  document.getElementById('fr-secExpenditure').classList.toggle('visible', tab==='expenditure');
+  document.getElementById('fr-tabRevenue').classList.toggle('active', tab==='revenue');
+  document.getElementById('fr-tabExpenditure').classList.toggle('active', tab==='expenditure');
+}
+function frShowBoth() {
+  ['fr-secRevenue','fr-secExpenditure'].forEach(id=>document.getElementById(id).classList.add('visible'));
+  ['fr-tabRevenue','fr-tabExpenditure'].forEach(id=>document.getElementById(id).classList.add('active'));
+}
+
+function fmtZWG(v) {
+  if (!v||v===0) return '<span class="fr-zero">-</span>';
+  return v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function sectionRow(label,drillUrl) {
+  const inner = drillUrl?`<a class="fr-drill" href="${drillUrl}">${label}</a>`:label;
+  return `<tr class="fr-section"><td colspan="6">${inner}</td></tr>`;
+}
+function subRow(label) { return `<tr class="fr-subsection"><td colspan="6">${label}</td></tr>`; }
+function dataRow(note,label,cols,alt,drillUrl) {
+  const cls=alt?'fr-data alt':'fr-data';
+  const inner=drillUrl?`<a class="fr-drill" href="${drillUrl}">${label}</a>`:label;
+  return `<tr class="${cls}"><td style="padding-left:24px">${inner}</td><td class="td-note">${note||''}</td>${cols.map(v=>`<td class="td-num">${fmtZWG(v)}</td>`).join('')}</tr>`;
+}
+function totalRow(label,cols) { return `<tr class="fr-total"><td>${label}</td><td></td>${cols.map(v=>`<td class="td-num">${fmtZWG(v)}</td>`).join('')}</tr>`; }
+function majorRow(label,cols,drillUrl) {
+  const inner=drillUrl?`<a class="fr-drill" href="${drillUrl}">${label}</a>`:label;
+  return `<tr class="fr-major"><td>${inner}</td><td></td>${cols.map(v=>`<td class="td-num">${fmtZWG(v)}</td>`).join('')}</tr>`;
+}
+function blankRow() { return `<tr class="fr-data"><td colspan="6" style="height:5px"></td></tr>`; }
+function invUrl(cat)  { return pageUrl('invoices.html',{category:cat}); }
+function expUrl(dept) { return pageUrl('budget.html',{tab:'expenditures',department:dept}); }
+function budgetUrl()  { return pageUrl('budget.html',{}); }
+
+function buildRevenue(d) {
+  const r=d.revenue; const rows=[];
+  function item(k){const i=r[k]||{annual:0,prop:0,billing:0,revenue:0};return[i.annual,i.prop,i.billing,i.revenue];}
+  function sum(...keys){return keys.reduce((a,k)=>{const i=r[k]||{annual:0,prop:0,billing:0,revenue:0};return[a[0]+i.annual,a[1]+i.prop,a[2]+i.billing,a[3]+i.revenue];},[0,0,0,0]);}
+  rows.push(sectionRow('REVENUE'));
+  rows.push(sectionRow('REVENUE FROM TRANSACTIONS WITHOUT BINDING ARRANGEMENTS'));
+  rows.push(sectionRow('TAXES'));
+  rows.push(dataRow(1,'Taxes on property',item('tax_property'),false,invUrl('rates')));
+  rows.push(totalRow('Total Taxes',item('tax_property')));
+  rows.push(blankRow());
+  rows.push(sectionRow('TRANSFERS'));
+  rows.push(subRow('Current'));
+  rows.push(dataRow(2,'Transfers from Central Government',item('trans_curr_central'),false));
+  rows.push(dataRow(3,'Transfers from Other Government Departments',item('trans_curr_other'),true));
+  rows.push(subRow('Capital'));
+  rows.push(dataRow(4,'Transfers from Central Government',item('trans_cap_central'),false));
+  rows.push(dataRow(5,'Transfers from Other Government Departments',item('trans_cap_other'),true));
+  rows.push(totalRow('Total Transfers',sum('trans_curr_central','trans_curr_other','trans_cap_central','trans_cap_other')));
+  rows.push(blankRow());
+  rows.push(sectionRow('GRANTS'));
+  rows.push(dataRow(6,'Grants',item('grants_grants'),false));
+  rows.push(dataRow(7,'Donations',item('grants_donations'),true));
+  rows.push(totalRow('Total Grants and Donations',sum('grants_grants','grants_donations')));
+  rows.push(blankRow());
+  rows.push(dataRow(8,'Fines, penalties, and forfeits',item('fines'),false,invUrl('other')));
+  rows.push(totalRow('Total Fines, Penalties and Forfeits',item('fines')));
+  rows.push(blankRow());
+  rows.push(sectionRow('REVENUE FROM TRANSACTIONS WITH BINDING ARRANGEMENTS',pageUrl('invoices.html',{})));
+  rows.push(dataRow(9,'Sale of goods',item('sale_of_goods'),false,invUrl('water')));
+  rows.push(dataRow(10,'Administrative fees',item('admin_fees'),true,invUrl('other')));
+  rows.push(dataRow(11,'Incidental sales by nonmarket establishments',item('incidental'),false));
+  rows.push(dataRow(12,'Licences and Permits',item('licences'),true,invUrl('licensing')));
+  rows.push(dataRow(13,'Rentals',item('rentals'),false,invUrl('rentals')));
+  rows.push(dataRow(14,'Estates',item('estates'),true,invUrl('rentals')));
+  rows.push(dataRow('','Service Charges',item('service_charges'),false,invUrl('sewerage')));
+  const salesTotal=sum('sale_of_goods','admin_fees','incidental','licences','rentals','estates','service_charges');
+  rows.push(totalRow('Total Sales of Goods',salesTotal));
+  rows.push(dataRow(15,'Other revenue',item('other_revenue'),false,invUrl('other')));
+  rows.push(totalRow('Total other revenue',item('other_revenue')));
+  const beforeFin=sum('tax_property','trans_curr_central','trans_curr_other','trans_cap_central','trans_cap_other','grants_grants','grants_donations','fines','sale_of_goods','admin_fees','incidental','licences','rentals','estates','service_charges','other_revenue');
+  rows.push(blankRow());
+  rows.push(majorRow('Total Revenue before Other Financing',beforeFin,pageUrl('invoices.html',{})));
+  rows.push(blankRow());
+  rows.push(sectionRow('OTHER FINANCING'));
+  rows.push(dataRow(16,'Loans',item('loans'),false));
+  rows.push(dataRow(17,'Bonds',item('bonds'),true));
+  const finTotal=sum('loans','bonds');
+  rows.push(totalRow('Total Other Financing',finTotal));
+  const grandTotal=beforeFin.map((v,i)=>v+finTotal[i]);
+  rows.push(blankRow());
+  rows.push(majorRow('Total Revenue',grandTotal,pageUrl('reports.html',{})));
+  return rows.join('');
+}
+
+function buildExpenditure(d) {
+  const e=d.expenditure; const rows=[];
+  function item(k){const i=e[k]||{annual:0,prop:0,exp:0,pmt:0};return[i.annual,i.prop,i.exp,i.pmt];}
+  function sum(...keys){return keys.reduce((a,k)=>{const i=e[k]||{annual:0,prop:0,exp:0,pmt:0};return[a[0]+i.annual,a[1]+i.prop,a[2]+i.exp,a[3]+i.pmt];},[0,0,0,0]);}
+  const EXP_ALL=expUrl('');
+  rows.push(sectionRow('EXPENDITURE',EXP_ALL));
+  rows.push(sectionRow('COMPENSATION OF EMPLOYEES',expUrl('Compensation of Employees')));
+  rows.push(subRow('Employment costs'));
+  rows.push(dataRow(17,'Wages and salaries in cash',item('wages_cash'),false,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Wages and salaries in kind',item('wages_kind'),true,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Bonus',item('bonus'),false,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Allowances',item('allowances'),true,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Social contributions',item('social_contrib'),false,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Standard development levy',item('sdl'),true,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','ZIMDEF',item('zimdef'),false,expUrl('Compensation of Employees')));
+  rows.push(dataRow('','Monthly councillors allowances',item('councillors'),true,expUrl('Compensation of Employees')));
+  rows.push(totalRow('Total Compensation of Employees',sum('wages_cash','wages_kind','bonus','allowances','social_contrib','sdl','zimdef','councillors')));
+  rows.push(blankRow());
+  rows.push(sectionRow('USE OF GOODS AND SERVICES',expUrl('Goods %26 Services — General')));
+  rows.push(dataRow(18,'General use of Goods and Services',item('goods_general'),false,expUrl('Goods %26 Services — General')));
+  rows.push(dataRow(19,'Repairs',item('repairs'),true,expUrl('Goods %26 Services — Repairs')));
+  rows.push(dataRow(20,'Maintenance',item('maintenance'),false,expUrl('Goods %26 Services — Maintenance')));
+  rows.push(totalRow('Total Use Of Goods And Services',sum('goods_general','repairs','maintenance')));
+  rows.push(blankRow());
+  rows.push(sectionRow('INTEREST'));
+  rows.push(dataRow(22,'Interest charge for the year on loans',item('interest_loans'),false,expUrl('Interest %26 Loan Charges')));
+  rows.push(totalRow('Total Interest',item('interest_loans')));
+  rows.push(blankRow());
+  rows.push(sectionRow('TRANSFERS'));
+  rows.push(subRow('Current'));
+  rows.push(dataRow(23,'Transfers to Central Government',item('trans_curr_central'),false));
+  rows.push(dataRow(24,'Transfers to Other Government Departments',item('trans_curr_other'),true));
+  rows.push(subRow('Capital'));
+  rows.push(dataRow(25,'Transfers to Central Government',item('trans_cap_central'),false));
+  rows.push(dataRow(26,'Transfers to Other Government Departments',item('trans_cap_other'),true));
+  rows.push(totalRow('Total Transfer Expenses',sum('trans_curr_central','trans_curr_other','trans_cap_central','trans_cap_other')));
+  rows.push(blankRow());
+  rows.push(sectionRow('GRANTS'));
+  rows.push(dataRow(27,'Grants and',item('grants_grants'),false));
+  rows.push(dataRow(28,'Donations',item('grants_donations'),true));
+  rows.push(totalRow('Total Grant and Donation expenses',sum('grants_grants','grants_donations')));
+  rows.push(blankRow());
+  rows.push(sectionRow('SOCIAL BENEFITS'));
+  rows.push(dataRow(29,'Funeral expenses',item('social_funeral'),false));
+  rows.push(dataRow('','Medical examination and expenses',item('social_medical'),true));
+  rows.push(totalRow('Total Social Benefits',sum('social_funeral','social_medical')));
+  rows.push(blankRow());
+  rows.push(sectionRow('CAPITAL EXPENDITURE',budgetUrl()));
+  rows.push(subRow('By Programme'));
+  rows.push(dataRow(30,'Roads',item('cap_roads'),false,expUrl('Capital — Roads %26 Transport')));
+  rows.push(dataRow(31,'Educational facilities',item('cap_education'),true,expUrl('Capital — Education Facilities')));
+  rows.push(dataRow(32,'Health facilities',item('cap_health'),false,expUrl('Capital — Health Facilities')));
+  rows.push(dataRow(33,'Water',item('cap_water'),true,expUrl('Capital — Water Infrastructure')));
+  rows.push(dataRow(34,'Roads',item('cap_roads2'),false,expUrl('Capital — Roads %26 Transport')));
+  rows.push(dataRow(35,'Social amenities',item('cap_social'),true,expUrl('Capital — Social Amenities')));
+  rows.push(dataRow(36,'Electricity',item('cap_electricity'),false,expUrl('Capital — Electricity Infrastructure')));
+  rows.push(dataRow('','Acquisition of Operational assets',item('cap_operational'),true,expUrl('Capital — Operational Assets')));
+  const capTotal=sum('cap_roads','cap_education','cap_health','cap_water','cap_roads2','cap_social','cap_electricity','cap_operational');
+  rows.push(totalRow('Total Capital Expenditure',capTotal));
+  const grandTotalExp=sum('wages_cash','wages_kind','bonus','allowances','social_contrib','sdl','zimdef','councillors','goods_general','repairs','maintenance','interest_loans','trans_curr_central','trans_curr_other','trans_cap_central','trans_cap_other','grants_grants','grants_donations','social_funeral','social_medical','cap_roads','cap_education','cap_health','cap_water','cap_roads2','cap_social','cap_electricity','cap_operational');
+  rows.push(blankRow());
+  rows.push(majorRow('Total Expenditure',grandTotalExp,EXP_ALL));
+  return rows.join('');
+}
+
+function updateCrossNav(month, year, data) {
+  document.getElementById('fr-navBudget').href       = pageUrl('budget.html',{});
+  document.getElementById('fr-navInvoices').href     = pageUrl('invoices.html',{});
+  document.getElementById('fr-navPayments').href     = pageUrl('payments.html',{});
+  document.getElementById('fr-navExpenditures').href = pageUrl('budget.html',{tab:'expenditures'});
+  document.getElementById('fr-navReports').href      = pageUrl('reports.html',{});
+  const fy=data?data.fiscal_year:'';
+  const zwg=data?(data.total_annual_budget_zwg||0):0;
+  const fmtZwgShort=v=>v>=1e9?`ZWG ${(v/1e9).toFixed(2)}B`:v>=1e6?`ZWG ${(v/1e6).toFixed(2)}M`:`ZWG ${v.toLocaleString('en-US',{maximumFractionDigits:0})}`;
+  document.getElementById('fr-crossNavInfo').textContent=fy?`FY ${fy}  |  Total Budget: ${fmtZwgShort(zwg)}`:`Period: ${MONTH_NAMES[month]} ${year}`;
+}
+
+async function loadFR() {
+  const frSM=document.getElementById('fr-selMonth');
+  const frSY=document.getElementById('fr-selYear');
+  const month=parseInt(frSM.value);
+  const year =parseInt(frSY.value);
+  const mn=MONTH_NAMES[month];
+  const lastDay=new Date(year,month,0).getDate();
+  ['fr-revPeriodTitle','fr-expPeriodTitle'].forEach(id=>document.getElementById(id).textContent=`${mn.toUpperCase()} ${year} FINANCIAL REPORT`);
+  ['fr-revMonthHead','fr-revMonthHead2','fr-revMonthHead3','fr-expMonthHead','fr-expMonthHead2','fr-expMonthHead3'].forEach(id=>document.getElementById(id).textContent=`(${mn})`);
+  const disc=`Disclosure: 1 ${mn} – ${lastDay} ${mn} ${year}. Amounts in ZWG (Zimbabwe Gold). Data sourced from City of Harare FMS. Click any line item to view source records.`;
+  document.getElementById('fr-revDisclosure').textContent=disc;
+  document.getElementById('fr-expDisclosure').textContent=disc;
+  updateCrossNav(month,year,null);
+  const loading='<tr><td colspan="6" style="text-align:center;padding:24px;color:#888">Loading…</td></tr>';
+  document.getElementById('fr-revBody').innerHTML=loading;
+  document.getElementById('fr-expBody').innerHTML=loading;
+  try {
+    const data=await apiFetch(`/api/reports/coh-financial-report?month=${month}&year=${year}`);
+    document.getElementById('fr-revBody').innerHTML=buildRevenue(data);
+    document.getElementById('fr-expBody').innerHTML=buildExpenditure(data);
+    updateCrossNav(month,year,data);
+  } catch(e) {
+    const err=`<tr><td colspan="6" style="text-align:center;padding:24px;color:#c0392b">${e.message}</td></tr>`;
+    document.getElementById('fr-revBody').innerHTML=err;
+    document.getElementById('fr-expBody').innerHTML=err;
   }
 }
 

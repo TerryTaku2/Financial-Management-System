@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Billing — City of Harare FMS</title>
+<title>Billing &amp; Invoices — City of Harare FMS</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
 </head>
@@ -11,20 +11,57 @@
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
     <div class="topbar">
-      <span class="topbar-title">Billing Management</span>
+      <span class="topbar-title" id="topbarTitle">Billing &amp; Invoices</span>
       <div class="topbar-right" id="topbarActions"></div>
     </div>
     <div class="page-content">
 
       <!-- Tabs -->
       <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
-        <button class="tab-btn active" id="tab-runs"       onclick="switchTab('runs')">Billing Runs</button>
-        <button class="tab-btn"        id="tab-rates"      onclick="switchTab('rates')">Rate Configuration</button>
+        <button class="tab-btn active" id="tab-invoices"   onclick="switchTab('invoices')">Invoices</button>
+        <button class="tab-btn"        id="tab-runs"       onclick="switchTab('runs')">Billing Runs</button>
+        <button class="tab-btn"        id="tab-rates"      onclick="switchTab('rates')">Rate Config</button>
         <button class="tab-btn"        id="tab-statement"  onclick="switchTab('statement')">Account Statement</button>
       </div>
 
+      <!-- ── Tab: Invoices ── -->
+      <div id="pane-invoices">
+        <div class="card">
+          <div class="filter-bar">
+            <input type="text" id="invSearch" placeholder="🔍  Search ratepayer name or account..." style="min-width:240px" oninput="debounceInvoices()">
+            <select id="statusFilter" onchange="loadInvoices()">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option><option value="paid">Paid</option>
+              <option value="overdue">Overdue</option><option value="disputed">Disputed</option><option value="waived">Waived</option>
+            </select>
+            <select id="categoryFilter" onchange="loadInvoices()">
+              <option value="">All Categories</option>
+              <option value="rates">Rates</option><option value="water">Water</option><option value="sewerage">Sewerage</option>
+              <option value="refuse">Refuse</option><option value="licensing">Licensing</option><option value="parking">Parking</option>
+              <option value="rentals">Rentals</option><option value="other">Other</option>
+            </select>
+            <select id="anomalyFilter" onchange="loadInvoices()">
+              <option value="">All Anomaly Levels</option>
+              <option value="high">High Anomaly</option><option value="medium">Medium</option><option value="low">Low</option>
+            </select>
+            <span id="invCountBadge" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Invoice #</th><th>Ratepayer</th><th>Category</th>
+                <th>Amount</th><th>Paid</th><th>Balance</th>
+                <th>Due Date</th><th>Status</th><th>Anomaly</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="invTable"><tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="invPagination"></div>
+        </div>
+      </div>
+
       <!-- ── Tab: Billing Runs ── -->
-      <div id="pane-runs">
+      <div id="pane-runs" style="display:none">
         <div class="card">
           <div class="card-header">
             <span class="card-title">Billing Runs</span>
@@ -74,20 +111,16 @@
           </div>
           <div style="display:flex;gap:8px;padding:0 16px 16px;flex-wrap:wrap">
             <input type="text" id="stmtSearch" placeholder="Search by account number or name..." style="min-width:280px"
-                   oninput="debounceSearch()">
+                   oninput="debounceStmt()">
             <button class="btn btn-primary btn-sm" onclick="loadStatementSearch()">Search</button>
           </div>
-          <!-- Ratepayer picker results -->
           <div id="stmtPickerWrap" style="padding:0 16px 8px;display:none">
             <div id="stmtPicker" style="border:1px solid var(--border);border-radius:6px;max-height:180px;overflow-y:auto"></div>
           </div>
-          <!-- Statement output -->
           <div id="statementOutput" style="display:none">
             <div style="padding:16px;border-top:1px solid var(--border)">
               <div id="stmtHeader" style="margin-bottom:16px"></div>
-              <!-- Summary bar -->
               <div class="stats-grid" id="stmtSummary" style="margin-bottom:16px"></div>
-              <!-- Invoices -->
               <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text1)">Invoices</div>
               <div class="table-wrap" style="margin-bottom:24px">
                 <table><thead><tr>
@@ -96,12 +129,10 @@
                 </tr></thead>
                 <tbody id="stmtInvTable"></tbody></table>
               </div>
-              <!-- Payments -->
               <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text1)">Payments Received</div>
               <div class="table-wrap">
                 <table><thead><tr>
-                  <th>Receipt #</th><th>Date</th><th>Amount</th><th>Currency</th>
-                  <th>Method</th><th>Reconciled</th>
+                  <th>Receipt #</th><th>Date</th><th>Amount (USD)</th><th>Method</th><th>Reconciled</th>
                 </tr></thead>
                 <tbody id="stmtPmtTable"></tbody></table>
               </div>
@@ -110,6 +141,63 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ── Create Invoice Modal ── -->
+<div class="modal-overlay" id="addInvModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Create Invoice</span>
+      <button class="modal-close" onclick="closeModal('addInvModal')">×</button>
+    </div>
+    <div class="form-group"><label>Account Number</label><input id="f_rpacct" type="text" placeholder="e.g. COH-123456" autocomplete="off"></div>
+    <div class="form-group"><label>Revenue Category</label>
+      <select id="f_cat">
+        <option value="rates">Rates</option><option value="water">Water</option>
+        <option value="sewerage">Sewerage</option><option value="refuse">Refuse</option>
+        <option value="licensing">Licensing</option><option value="parking">Parking</option>
+        <option value="rentals">Rentals</option><option value="other">Other</option>
+      </select>
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label>Amount (USD)</label><input id="f_amount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Due Date</label><input id="f_due" type="date"></div>
+    </div>
+    <div class="form-group"><label>Notes (optional)</label><textarea id="f_notes" rows="2" placeholder="Any additional notes..."></textarea></div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--text2);margin-bottom:4px">
+      Initial status: <strong style="color:var(--warning)">Pending</strong> — automatically set to Overdue once the due date passes.
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addInvModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createInvoice()">Create Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Invoice Modal ── -->
+<div class="modal-overlay" id="editInvModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="editInvTitle">Edit Invoice</span>
+      <button class="modal-close" onclick="closeModal('editInvModal')">×</button>
+    </div>
+    <input type="hidden" id="e_id">
+    <div class="grid-2">
+      <div class="form-group"><label>Status</label>
+        <select id="e_status">
+          <option value="pending">Pending</option><option value="overdue">Overdue</option>
+          <option value="disputed">Disputed</option><option value="waived">Waived</option><option value="paid">Paid</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Due Date</label><input id="e_due" type="date"></div>
+    </div>
+    <div class="form-group"><label>Amount (USD)</label><input id="e_amount" type="number" step="0.01" placeholder="0.00"></div>
+    <div class="form-group"><label>Notes</label><textarea id="e_notes" rows="2" placeholder="Notes..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editInvModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvoiceEdit()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -202,23 +290,234 @@
 <script>
 requireAuth(); buildSidebar('billing');
 
-const CATEGORIES = ['rates','water','sewerage','refuse','licensing','parking','rentals','other'];
+const TABS = ['invoices', 'runs', 'rates', 'statement'];
+let currentInvPage = 1;
+let _filterRatepayerId = null;
+let _invDebounce = null;
 let _stmtDebounce = null;
 let _currentStmtRatepayerId = null;
+const currentUser = getUser();
 
-// ── Tab switching ──────────────────────────────────────────────────────────
+// ── Tab switching ─────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  ['runs','rates','statement'].forEach(t => {
-    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
-    document.getElementById('pane-'+t).style.display = t === tab ? '' : 'none';
+  TABS.forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('pane-' + t).style.display = t === tab ? '' : 'none';
   });
-  const actions = document.getElementById('topbarActions');
-  actions.innerHTML = '';
-  if (tab === 'runs') loadRuns();
-  if (tab === 'rates') loadRates();
+  renderTopbarActions(tab);
+  if (tab === 'invoices')   loadInvoices();
+  if (tab === 'runs')       loadRuns();
+  if (tab === 'rates')      loadRates();
 }
 
-// ── Billing Runs ──────────────────────────────────────────────────────────
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'invoices') {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+      <input type="file" id="importFile" accept=".csv,.xlsx" style="display:none" onchange="importInvoices(this)">
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/invoices?format=csv','invoices.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/invoices?format=xlsx','invoices.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" title="Download import template" onclick="downloadExport('/api/templates/invoices?format=xlsx','template_invoices.xlsx')">📋 Template</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Invoice Register','invTable','invoices.pdf')">⬇ PDF</button>
+      <button class="btn btn-primary" onclick="openAddInvModal()">+ New Invoice</button>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+// ── Invoices ──────────────────────────────────────────────────────────────────
+function debounceInvoices() {
+  clearTimeout(_invDebounce);
+  _invDebounce = setTimeout(() => loadInvoices(1), 350);
+}
+
+async function loadInvoices(page = 1) {
+  currentInvPage = page;
+  const status  = document.getElementById('statusFilter').value;
+  const cat     = document.getElementById('categoryFilter').value;
+  const anomaly = document.getElementById('anomalyFilter').value;
+  const search  = document.getElementById('invSearch').value.trim();
+  const skip    = (page - 1) * 30;
+  const tbody   = document.getElementById('invTable');
+  try {
+    let url = `/api/invoices?skip=${skip}&limit=30`;
+    if (status)  url += `&status=${status}`;
+    if (cat)     url += `&category=${cat}`;
+    if (anomaly) url += `&anomaly=${anomaly}`;
+    if (search)  url += `&search=${encodeURIComponent(search)}`;
+    if (_filterRatepayerId) url += `&ratepayer_id=${_filterRatepayerId}`;
+    const data = await apiFetch(url);
+    document.getElementById('invCountBadge').textContent = `${data.total} invoices`;
+    if (!data.items.length) {
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🧾</div><p>No invoices found</p></div></td></tr>`;
+      renderPagination('invPagination', 0, 30, 1, 'loadInvoices');
+      return;
+    }
+    const canEdit = ['admin','accountant','revenue_officer'].includes(currentUser?.role);
+    tbody.innerHTML = data.items.map(inv => `
+      <tr title="${inv.anomaly_reason || ''}">
+        <td><code style="font-size:11.5px;color:var(--primary-light)">${inv.invoice_number}</code></td>
+        <td>
+          <div style="font-weight:500;font-size:13px">${inv.ratepayer_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${inv.account_number}</div>
+        </td>
+        <td><span class="badge badge-info">${inv.category}</span></td>
+        <td class="fw-bold">${fmtMoney(inv.amount)}</td>
+        <td class="text-success">${fmtMoney(inv.amount_paid)}</td>
+        <td class="${inv.balance > 0 ? 'text-danger' : 'text-success'}">${fmtMoney(inv.balance)}</td>
+        <td style="font-size:12.5px;color:var(--text2)">${fmtDate(inv.due_date)}</td>
+        <td>${statusBadge(inv.status)}</td>
+        <td>${anomalyBadge(inv.anomaly_flag)}</td>
+        <td style="white-space:nowrap">
+          ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="openEditInvModal(${JSON.stringify(inv).replace(/"/g,'&quot;')})">Edit</button>` : ''}
+          <button class="btn btn-sm btn-secondary" onclick="printInvoice(${JSON.stringify(inv).replace(/"/g,'&quot;')})">🖨 Print</button>
+          <a class="btn btn-sm btn-secondary" href="${pageUrl('payments.html',{ratepayer_id:inv.ratepayer_id})}">Payments</a>
+          <button class="btn btn-sm btn-secondary" onclick="loadStmtForRatepayer(${inv.ratepayer_id})">Statement</button>
+          ${canEdit && inv.amount_paid == 0 ? `<button class="btn btn-sm btn-danger" onclick="deleteInvoice(${inv.id},'${inv.invoice_number}')">Delete</button>` : ''}
+        </td>
+      </tr>`).join('');
+    renderPagination('invPagination', data.total, 30, page, 'loadInvoices');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">${e.message}</td></tr>`;
+  }
+}
+
+function openAddInvModal() {
+  const d = new Date(); d.setDate(d.getDate() + 30);
+  document.getElementById('f_due').value = d.toISOString().slice(0, 10);
+  document.getElementById('f_rpacct').value = '';
+  document.getElementById('f_amount').value = '';
+  document.getElementById('f_notes').value = '';
+  openModal('addInvModal');
+}
+
+function openEditInvModal(inv) {
+  document.getElementById('e_id').value     = inv.id;
+  document.getElementById('e_status').value = inv.status;
+  document.getElementById('e_due').value    = inv.due_date;
+  document.getElementById('e_amount').value = inv.amount;
+  document.getElementById('e_notes').value  = inv.notes || '';
+  document.getElementById('editInvTitle').textContent = `Edit Invoice — ${inv.invoice_number}`;
+  openModal('editInvModal');
+}
+
+async function saveInvoiceEdit() {
+  const id = document.getElementById('e_id').value;
+  const data = {
+    status:   document.getElementById('e_status').value,
+    due_date: document.getElementById('e_due').value,
+    amount:   parseFloat(document.getElementById('e_amount').value),
+    notes:    document.getElementById('e_notes').value,
+  };
+  try {
+    await apiPut(`/api/invoices/${id}`, data);
+    toast('Invoice updated', 'success');
+    closeModal('editInvModal');
+    loadInvoices(currentInvPage);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteInvoice(id, num) {
+  await confirmDelete(`Delete invoice ${num}? This cannot be undone.`, async () => {
+    try {
+      await apiDelete(`/api/invoices/${id}`);
+      toast('Invoice deleted', 'success');
+      loadInvoices(currentInvPage);
+    } catch(e) { toast(e.message, 'error'); }
+  });
+}
+
+async function createInvoice() {
+  const acct   = document.getElementById('f_rpacct').value.trim();
+  const amount = parseFloat(document.getElementById('f_amount').value);
+  const due    = document.getElementById('f_due').value;
+  if (!acct || !amount || !due) { toast('Please fill all required fields', 'warning'); return; }
+  try {
+    const lookup = await apiFetch(`/api/ratepayers?search=${encodeURIComponent(acct)}&limit=1`);
+    const rp = (lookup.items || lookup)[0];
+    if (!rp) { toast(`No ratepayer found for account "${acct}"`, 'warning'); return; }
+    const res = await apiPost('/api/invoices', {
+      ratepayer_id: rp.id,
+      category:     document.getElementById('f_cat').value,
+      amount,
+      due_date:     due,
+      notes:        document.getElementById('f_notes').value,
+    });
+    toast(`Invoice ${res.invoice_number} created for ${rp.full_name}`, 'success');
+    closeModal('addInvModal');
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function importInvoices(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const res = await uploadImport('/api/import/invoices', file);
+    toast(res.message, 'success');
+    if (res.errors && res.errors.length) alert(`Warnings:\n${res.errors.join('\n')}`);
+    loadInvoices();
+  } catch(e) { toast(e.message, 'error'); }
+  input.value = '';
+}
+
+function printInvoice(inv) {
+  const w = window.open('', '_blank', 'width=720,height=900');
+  const sc = {paid:'#27ae60',pending:'#f39c12',overdue:'#e74c3c',disputed:'#8e44ad',waived:'#7f8c8d'}[inv.status] || '#333';
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Invoice ${inv.invoice_number}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#222;background:#fff;padding:32px}
+    .header{display:flex;align-items:center;gap:16px;border-bottom:3px solid #1f3864;padding-bottom:16px;margin-bottom:24px}
+    .header img{width:60px;height:60px;object-fit:contain}
+    .header-text h1{font-size:20px;color:#1f3864;font-weight:700}
+    .header-text p{font-size:12px;color:#555;margin-top:2px}
+    .inv-title{font-size:26px;font-weight:700;color:#1f3864;margin-bottom:4px}
+    .inv-number{font-size:13px;color:#555;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+    .box{background:#f4f7fb;border:1px solid #dde4f0;border-radius:6px;padding:14px}
+    .box label{font-size:10px;text-transform:uppercase;color:#888;display:block;margin-bottom:4px}
+    .box span{font-size:14px;font-weight:600;color:#222}
+    table{width:100%;border-collapse:collapse;margin-bottom:24px}
+    th{background:#1f3864;color:#fff;font-size:11px;padding:8px 12px;text-align:left}
+    td{padding:10px 12px;border-bottom:1px solid #eee;font-size:13px}
+    tr:nth-child(even) td{background:#f9fbff}
+    .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;color:#fff;background:${sc}}
+    .total-row td{font-weight:700;background:#eef3fb}
+    .footer{border-top:1px solid #dde;padding-top:12px;font-size:11px;color:#888;text-align:center}
+    @media print{body{padding:16px}.no-print{display:none}}
+  </style></head><body>
+  <div class="header">
+    <img src="/static/images/crest.png" alt="Crest" onerror="this.style.display='none'">
+    <div class="header-text"><h1>City of Harare</h1><p>Financial Management System — Tax Invoice</p></div>
+  </div>
+  <div class="inv-title">${inv.invoice_number}</div>
+  <div class="inv-number">Issue Date: ${inv.issue_date} &nbsp;|&nbsp; Due Date: ${inv.due_date} &nbsp;|&nbsp; Status: <span class="status-badge">${inv.status.toUpperCase()}</span></div>
+  <div class="grid">
+    <div class="box"><label>Billed To</label><span>${inv.ratepayer_name}</span><br><span style="font-size:12px;color:#555">${inv.account_number}</span></div>
+    <div class="box"><label>Category</label><span style="text-transform:capitalize">${inv.category}</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th><th>Amount (USD)</th></tr></thead>
+    <tbody><tr><td>${inv.category.charAt(0).toUpperCase()+inv.category.slice(1)} Charges</td><td>$${Number(inv.amount).toFixed(2)}</td></tr></tbody>
+    <tfoot>
+      <tr class="total-row"><td>Total Billed</td><td>$${Number(inv.amount).toFixed(2)}</td></tr>
+      <tr class="total-row"><td>Amount Paid</td><td style="color:#27ae60">$${Number(inv.amount_paid).toFixed(2)}</td></tr>
+      <tr class="total-row"><td>Balance Due</td><td style="color:${inv.balance > 0 ? '#e74c3c' : '#27ae60'}">$${Number(inv.balance).toFixed(2)}</td></tr>
+    </tfoot>
+  </table>
+  ${inv.notes ? `<p style="font-size:12px;color:#555;margin-bottom:16px"><strong>Notes:</strong> ${inv.notes}</p>` : ''}
+  <div class="footer">City of Harare FMS &nbsp;|&nbsp; Printed: ${new Date().toLocaleString('en-GB')} &nbsp;|&nbsp; Confidential</div>
+  <div class="no-print" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 28px;background:#1f3864;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">Print Invoice</button>
+  </div>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── Billing Runs ──────────────────────────────────────────────────────────────
 async function loadRuns() {
   const tbody = document.getElementById('runsTable');
   tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:32px">Loading...</td></tr>';
@@ -245,14 +544,11 @@ async function loadRuns() {
 }
 
 function openRunModal() {
-  // Default period = current year-month
   const now = new Date();
-  document.getElementById('run_period').value = now.toISOString().slice(0,7);
-  const due = new Date(now.getFullYear(), now.getMonth()+1, 28);
-  document.getElementById('run_due').value = due.toISOString().slice(0,10);
+  document.getElementById('run_period').value = now.toISOString().slice(0, 7);
+  const due = new Date(now.getFullYear(), now.getMonth() + 1, 28);
+  document.getElementById('run_due').value = due.toISOString().slice(0, 10);
   document.getElementById('run_notes').value = '';
-
-  // Build category checkboxes from active rates
   apiFetch('/api/billing/rates').then(rates => {
     const active = rates.filter(r => r.is_active);
     const wrap = document.getElementById('runCatChecks');
@@ -263,8 +559,7 @@ function openRunModal() {
       </label>`).join('') :
       '<span style="color:var(--danger);font-size:12px">No active rates configured. Add rates first.</span>';
   }).catch(() => {
-    document.getElementById('runCatChecks').innerHTML =
-      '<span style="color:var(--danger);font-size:12px">Could not load rates.</span>';
+    document.getElementById('runCatChecks').innerHTML = '<span style="color:var(--danger);font-size:12px">Could not load rates.</span>';
   });
   openModal('runModal');
 }
@@ -273,10 +568,7 @@ async function executeRun() {
   const period = document.getElementById('run_period').value.trim();
   const due    = document.getElementById('run_due').value.trim();
   if (!period || !due) { toast('Please fill in period and due date.', 'warning'); return; }
-
-  const checks = document.querySelectorAll('#runCatChecks input[type=checkbox]:checked');
-  const cats   = Array.from(checks).map(c => c.value);
-
+  const cats = Array.from(document.querySelectorAll('#runCatChecks input[type=checkbox]:checked')).map(c => c.value);
   const btn = document.getElementById('btnExecuteRun');
   btn.disabled = true; btn.textContent = 'Processing...';
   try {
@@ -304,20 +596,15 @@ async function viewRun(id) {
     document.getElementById('runDetailTitle').textContent = `Run ${r.run_number} — ${r.billing_period}`;
     const summary = `
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 16px 0">
-        ${statBox('Period', r.billing_period)}
-        ${statBox('Invoices', r.invoices_created)}
-        ${statBox('Total Amount', '$'+fmt(r.total_amount))}
-        ${statBox('Due Date', r.due_date)}
+        ${statBox('Period', r.billing_period)}${statBox('Invoices', r.invoices_created)}
+        ${statBox('Total Amount', '$'+fmt(r.total_amount))}${statBox('Due Date', r.due_date)}
       </div>
       ${r.notes ? `<p style="padding:4px 16px;font-size:12px;color:var(--text2)">${r.notes}</p>` : ''}`;
     const rows = r.invoices.length ? r.invoices.map(i => `
       <tr>
         <td style="font-size:11px">${i.invoice_number}</td>
-        <td>${i.account_number}</td>
-        <td>${i.ratepayer}</td>
-        <td>${i.category}</td>
-        <td>$${fmt(i.amount)}</td>
-        <td>${i.due_date}</td>
+        <td>${i.account_number}</td><td>${i.ratepayer}</td><td>${i.category}</td>
+        <td>$${fmt(i.amount)}</td><td>${i.due_date}</td>
         <td><span class="badge badge-${statusColor(i.status)}">${i.status}</span></td>
       </tr>`).join('') : '<tr><td colspan="7" class="text-center text-muted">No invoices found for this run.</td></tr>';
     document.getElementById('runDetailBody').innerHTML = summary + `
@@ -332,7 +619,7 @@ async function viewRun(id) {
   }
 }
 
-// ── Rate Configuration ─────────────────────────────────────────────────────
+// ── Rate Configuration ────────────────────────────────────────────────────────
 async function loadRates() {
   const tbody = document.getElementById('ratesTable');
   tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr>';
@@ -415,8 +702,8 @@ async function deleteRate(id, cat) {
   } catch(e) { toast(e.message, 'error'); }
 }
 
-// ── Account Statement ──────────────────────────────────────────────────────
-function debounceSearch() {
+// ── Account Statement ─────────────────────────────────────────────────────────
+function debounceStmt() {
   clearTimeout(_stmtDebounce);
   _stmtDebounce = setTimeout(loadStatementSearch, 350);
 }
@@ -428,20 +715,15 @@ async function loadStatementSearch() {
     const data = await apiFetch(`/api/ratepayers?search=${encodeURIComponent(q)}&limit=8`);
     const items = data.items || data;
     const picker = document.getElementById('stmtPicker');
-    if (!items.length) {
-      picker.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text2)">No ratepayers found.</div>';
-    } else {
-      picker.innerHTML = items.map(rp => `
-        <div onclick="selectRatepayer(${rp.id})" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);hover:background:var(--bg3)"
-             onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-          <strong>${rp.account_number}</strong> — ${rp.full_name}
-          <span style="font-size:11px;color:var(--text2);margin-left:6px">${rp.ward}, ${rp.zone}</span>
-        </div>`).join('');
-    }
+    picker.innerHTML = items.length ? items.map(rp => `
+      <div onclick="selectRatepayer(${rp.id})" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)"
+           onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <strong>${rp.account_number}</strong> — ${rp.full_name}
+        <span style="font-size:11px;color:var(--text2);margin-left:6px">${rp.ward}, ${rp.zone}</span>
+      </div>`).join('') :
+      '<div style="padding:10px 12px;font-size:12px;color:var(--text2)">No ratepayers found.</div>';
     document.getElementById('stmtPickerWrap').style.display = '';
-  } catch(e) {
-    document.getElementById('stmtPickerWrap').style.display = 'none';
-  }
+  } catch(e) { document.getElementById('stmtPickerWrap').style.display = 'none'; }
 }
 
 async function selectRatepayer(id) {
@@ -450,15 +732,18 @@ async function selectRatepayer(id) {
   await loadStatement(id);
 }
 
+function loadStmtForRatepayer(id) {
+  switchTab('statement');
+  loadStatement(id);
+}
+
 async function loadStatement(id) {
   document.getElementById('statementOutput').style.display = 'none';
   try {
-    const s = await apiFetch(`/api/billing/statement/${id}`);
+    const s  = await apiFetch(`/api/billing/statement/${id}`);
     const rp = s.ratepayer;
     const sm = s.summary;
-
     document.getElementById('stmtSearch').value = `${rp.account_number} — ${rp.full_name}`;
-
     document.getElementById('stmtHeader').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
@@ -472,77 +757,62 @@ async function loadStatement(id) {
         <div style="text-align:right">
           <div style="font-size:11px;color:var(--text2)">Statement generated</div>
           <div style="font-size:12px">${s.generated_at}</div>
-          <div style="margin-top:8px;font-size:11px;color:var(--text2)">City of Harare</div>
-          <div style="font-size:11px;color:var(--text2)">Financial Management System</div>
+          <div style="margin-top:8px;font-size:11px;color:var(--text2)">City of Harare Financial Management System</div>
         </div>
       </div>`;
-
-    document.getElementById('stmtSummary').innerHTML = `
-      ${smBox('Total Billed', '$'+fmt(sm.total_billed), 'blue')}
-      ${smBox('Total Paid', '$'+fmt(sm.total_paid), 'green')}
-      ${smBox('Outstanding', '$'+fmt(sm.total_balance), sm.total_balance > 0 ? 'yellow' : 'green')}
-      ${smBox('Overdue', '$'+fmt(sm.overdue_balance), sm.overdue_balance > 0 ? 'red' : 'green')}`;
-
+    document.getElementById('stmtSummary').innerHTML =
+      smBox('Total Billed',  '$'+fmt(sm.total_billed),   'blue') +
+      smBox('Total Paid',    '$'+fmt(sm.total_paid),     'green') +
+      smBox('Outstanding',   '$'+fmt(sm.total_balance),  sm.total_balance  > 0 ? 'yellow' : 'green') +
+      smBox('Overdue',       '$'+fmt(sm.overdue_balance),sm.overdue_balance > 0 ? 'red'    : 'green');
     document.getElementById('stmtInvTable').innerHTML = s.invoices.length ?
       s.invoices.map(i => `<tr>
         <td style="font-size:11px">${i.invoice_number}</td>
         <td style="text-transform:capitalize">${i.category}</td>
-        <td>${i.issue_date}</td>
-        <td>${i.due_date}</td>
-        <td>$${fmt(i.amount)}</td>
-        <td>$${fmt(i.amount_paid)}</td>
-        <td style="font-weight:${i.balance > 0 ? '700' : '400'};color:${i.balance > 0 ? 'var(--danger)' : 'inherit'}">$${fmt(i.balance)}</td>
+        <td>${i.issue_date}</td><td>${i.due_date}</td>
+        <td>$${fmt(i.amount)}</td><td>$${fmt(i.amount_paid)}</td>
+        <td style="font-weight:${i.balance>0?'700':'400'};color:${i.balance>0?'var(--danger)':'inherit'}">$${fmt(i.balance)}</td>
         <td><span class="badge badge-${statusColor(i.status)}">${i.status}</span></td>
       </tr>`).join('') :
       '<tr><td colspan="8" class="text-center text-muted">No invoices.</td></tr>';
-
     document.getElementById('stmtPmtTable').innerHTML = s.payments.length ?
       s.payments.map(p => `<tr>
         <td style="font-size:11px">${p.receipt_number}</td>
-        <td>${p.payment_date}</td>
-        <td>$${fmt(p.amount)}</td>
-        <td>${p.currency}</td>
-        <td>${p.payment_method}</td>
+        <td>${p.payment_date}</td><td>$${fmt(p.amount)}</td><td>${p.payment_method}</td>
         <td><span class="badge badge-${p.is_reconciled ? 'green' : 'yellow'}">${p.is_reconciled ? 'Yes' : 'Pending'}</span></td>
       </tr>`).join('') :
-      '<tr><td colspan="6" class="text-center text-muted">No payments recorded.</td></tr>';
-
+      '<tr><td colspan="5" class="text-center text-muted">No payments recorded.</td></tr>';
     document.getElementById('statementOutput').style.display = '';
     document.getElementById('btnPrint').style.display = '';
   } catch(e) { toast(e.message, 'error'); }
 }
 
-function printStatement() {
-  window.print();
-}
+function printStatement() { window.print(); }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n) { return (+(n||0)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-
-function statusColor(s) {
-  return {paid:'green',pending:'yellow',overdue:'red',disputed:'red',waived:'blue'}[s] || 'blue';
-}
-
+function statusColor(s) { return {paid:'green',pending:'yellow',overdue:'red',disputed:'red',waived:'blue'}[s]||'blue'; }
 function statBox(label, value) {
   return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
     <div style="font-size:11px;color:var(--text2)">${label}</div>
-    <div style="font-size:15px;font-weight:700;margin-top:2px">${value}</div>
-  </div>`;
+    <div style="font-size:15px;font-weight:700;margin-top:2px">${value}</div></div>`;
 }
 function smBox(label, value, color) {
   return `<div class="stat-card ${color}"><div class="stat-value">${value}</div><div class="stat-label">${label}</div></div>`;
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 (function() {
   const p = getUrlParams();
-  if (p.tab) {
-    switchTab(p.tab);
-  } else {
-    loadRuns();
-  }
-  if (p.ratepayer_id) {
-    switchTab('statement');
+  if (p.ratepayer_id) _filterRatepayerId = parseInt(p.ratepayer_id);
+  if (p.status)    document.getElementById('statusFilter').value   = p.status;
+  if (p.anomaly)   document.getElementById('anomalyFilter').value  = p.anomaly;
+  if (p.category)  document.getElementById('categoryFilter').value = p.category;
+
+  const tab = p.tab || 'invoices';
+  switchTab(tab);
+
+  if (p.ratepayer_id && tab === 'statement') {
     loadStatement(parseInt(p.ratepayer_id));
   }
 })();
@@ -556,7 +826,7 @@ function smBox(label, value, color) {
 }
 .tab-btn:hover { color: var(--text1); }
 .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
-.badge-blue   { background: #dbeafe; color: #1d4ed8; }
+.badge-blue { background: #dbeafe; color: #1d4ed8; }
 @media print {
   .sidebar, .topbar, .tab-btn, #stmtSearch, .btn, #stmtPickerWrap { display: none !important; }
   .main-content { margin: 0 !important; }

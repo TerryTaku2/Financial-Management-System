@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analytics — City of Harare FMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Outer page tabs ───────────────────────────────────────────── */
+.page-tab-bar{display:flex;gap:4px;padding:0 0 0 2px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.page-tab-btn{background:none;border:none;padding:10px 20px;font-size:13.5px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.page-tab-btn.active{color:var(--primary-light);border-bottom-color:var(--primary-light)}
+.page-tab-btn:hover:not(.active){color:var(--text1)}
+.page-tab-pane{display:none}.page-tab-pane.active{display:block}
+
+/* ── Aging: hero strip ─────────────────────────────────────────── */
+.hero-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.hero-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;position:relative;overflow:hidden}
+.hero-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.hero-card.ar::before{background:var(--primary)}
+.hero-card.ap::before{background:var(--warning)}
+.hero-card.crit::before{background:var(--danger)}
+.hero-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:5px}
+.hero-value{font-family:'Crimson Pro',serif;font-size:22px;font-weight:700;line-height:1;margin-bottom:4px}
+.hero-card.ar   .hero-value{color:var(--primary-light)}
+.hero-card.ap   .hero-value{color:var(--warning)}
+.hero-card.crit .hero-value{color:var(--danger)}
+.hero-meta{font-size:10.5px;color:var(--text2)}
+
+/* ── Aging: inner tab bar (Debtors / Creditors) ────────────────── */
+.aging-inner-bar{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.aging-inner-btn{padding:7px 18px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;font-family:'DM Sans',sans-serif;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.aging-inner-btn:hover{color:var(--text)}
+.aging-inner-btn.active.ar{color:var(--primary-light);border-bottom-color:var(--primary)}
+.aging-inner-btn.active.ap{color:var(--warning);border-bottom-color:var(--warning)}
+.aging-inner-panel{display:none}.aging-inner-panel.active{display:block}
+
+/* ── Aging: section card ───────────────────────────────────────── */
+.section-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.section-head{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.section-head.ar{border-top:2px solid var(--primary)}
+.section-head.ap{border-top:2px solid var(--warning)}
+.section-title{font-family:'Crimson Pro',serif;font-size:17px;font-weight:700}
+.section-sub{font-size:11.5px;color:var(--text2);margin-top:1px}
+.count-chip{padding:3px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-size:11px;color:var(--text2);white-space:nowrap;flex-shrink:0}
+.section-body{padding:14px 18px}
+
+/* ── Aging: toolbar ────────────────────────────────────────────── */
+.aging-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.aging-toolbar select{width:auto;min-width:130px;padding:5px 9px;font-size:12.5px}
+.search-wrap{position:relative;flex:1;min-width:180px;max-width:280px}
+.search-wrap input{padding:5px 9px 5px 28px;font-size:12.5px}
+.search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text3);pointer-events:none}
+.toolbar-sep{width:1px;height:22px;background:var(--border);margin:0 1px}
+
+/* ── Aging: distribution bar ───────────────────────────────────── */
+.dist-wrap{margin-bottom:12px;display:none}
+.dist-label{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:5px}
+.dist-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--bg3);gap:1px}
+.dist-seg{height:100%;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.dist-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:5px}
+.dist-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text2)}
+.dist-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* ── Aging: bucket grid ────────────────────────────────────────── */
+.bucket-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
+.bucket-card{border-radius:8px;padding:10px 8px 14px;text-align:center;position:relative;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.bucket-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.b-icon{font-size:13px;margin-bottom:3px;opacity:.5}
+.b-label{font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;opacity:.8}
+.b-amount{font-family:'Crimson Pro',serif;font-size:13px;font-weight:700;margin-bottom:2px;line-height:1}
+.b-pct{font-size:9px;opacity:.6}
+.b-bar{position:absolute;bottom:0;left:0;height:2px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.bc-current {background:rgba(39,174,96,.10); color:var(--success);      border:1px solid rgba(39,174,96,.22)}
+.bc-30      {background:rgba(59,125,216,.10);color:var(--primary-light); border:1px solid rgba(59,125,216,.22)}
+.bc-60      {background:rgba(243,156,18,.10);color:var(--warning);       border:1px solid rgba(243,156,18,.22)}
+.bc-90      {background:rgba(230,126,34,.14);color:#e67e22;              border:1px solid rgba(230,126,34,.22)}
+.bc-120     {background:rgba(192,57,43,.12); color:#c0392b;              border:1px solid rgba(192,57,43,.22)}
+.bc-120plus {background:rgba(142,68,173,.14);color:#8e44ad;              border:1px solid rgba(142,68,173,.22)}
+
+/* ── Aging: charts row ─────────────────────────────────────────── */
+.aging-charts-row{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px}
+.chart-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.chart-title{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:8px}
+
+/* ── Aging: table ──────────────────────────────────────────────── */
+.aging-table-wrap{overflow-x:auto}
+.aging-table-wrap table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+.aging-table-wrap th{background:var(--bg3);color:var(--text2);font-size:9px;text-transform:uppercase;letter-spacing:.07em;font-weight:600;padding:7px 9px;text-align:right;border-bottom:1px solid var(--border)}
+.aging-table-wrap th:first-child,.aging-table-wrap th:nth-child(2),.aging-table-wrap th:nth-child(3){text-align:left}
+.aging-table-wrap td{padding:7px 9px;border-bottom:1px solid rgba(42,51,71,.55);text-align:right;color:var(--text)}
+.aging-table-wrap td:first-child,.aging-table-wrap td:nth-child(2),.aging-table-wrap td:nth-child(3){text-align:left}
+.aging-table-wrap tbody tr:hover td{background:rgba(59,125,216,.05)}
+.aging-table-wrap tr.total-row td{font-weight:700;background:var(--bg3);border-top:2px solid var(--border);font-size:12.5px}
+.col-current{color:var(--success)}.col-30{color:var(--primary-light)}.col-60{color:var(--warning)}
+.col-90{color:#e67e22}.col-120{color:#c0392b;font-weight:500}.col-120plus{color:#8e44ad;font-weight:600}
+.col-total{font-weight:700}.zero-cell{color:var(--text3)!important;font-weight:400!important}
+
+/* ── Aging: risk pill ──────────────────────────────────────────── */
+.risk-pill{display:inline-block;padding:1px 6px;border-radius:10px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;margin-left:4px}
+.risk-critical{background:rgba(142,68,173,.2);color:#8e44ad}
+.risk-high{background:rgba(192,57,43,.2);color:#c0392b}
+.risk-medium{background:rgba(243,156,18,.15);color:var(--warning)}
+
+/* ── Aging: detail panel ───────────────────────────────────────── */
+.detail-toggle{display:flex;align-items:center;gap:7px;width:100%;padding:8px 12px;margin-top:12px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;transition:border-color .15s,color .15s;text-align:left;font-family:'DM Sans',sans-serif}
+.detail-toggle:hover{border-color:var(--primary);color:var(--primary-light)}
+.detail-toggle .chev{margin-left:auto;font-size:10px;transition:transform .2s}
+.detail-toggle.open .chev{transform:rotate(180deg)}
+.detail-panel{background:var(--bg3);border:1px solid var(--border);border-radius:7px;margin-top:6px;display:none;overflow:hidden}
+.detail-panel.open{display:block}
+.detail-panel-hdr{padding:7px 12px;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text2)}
+.detail-panel table{width:100%;border-collapse:collapse;font-size:11.5px;white-space:nowrap}
+.detail-panel th{padding:6px 10px;color:var(--text2);font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:600;text-align:left}
+.detail-panel td{padding:6px 10px;border-bottom:1px solid rgba(42,51,71,.5);color:var(--text);text-align:left}
+.export-group{display:flex;align-items:center;gap:5px}
+.export-sep{font-size:10px;color:var(--text3);margin:0 1px}
+
+/* ── Charts: layout ────────────────────────────────────────────── */
+.cg-layout{display:grid;grid-template-columns:280px 1fr;gap:16px;height:calc(100vh - 130px);box-sizing:border-box;overflow:hidden}
+.cg-panel{display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:4px}
+.cg-section{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.cg-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:10px}
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.preset-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 6px;cursor:pointer;text-align:center;font-size:11px;color:var(--text1);transition:all .15s;line-height:1.3}
+.preset-btn:hover{background:rgba(59,125,216,.15);border-color:var(--primary);color:var(--primary)}
+.preset-btn.active{background:rgba(59,125,216,.2);border-color:var(--primary);color:var(--primary);font-weight:600}
+.preset-icon{font-size:18px;display:block;margin-bottom:3px}
+.type-pills{display:flex;flex-wrap:wrap;gap:5px}
+.type-pill{padding:4px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;cursor:pointer;background:var(--bg3);color:var(--text1);transition:all .15s}
+.type-pill:hover{border-color:var(--primary);color:var(--primary)}
+.type-pill.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.scheme-grid{display:flex;gap:6px;flex-wrap:wrap}
+.scheme-btn{width:32px;height:22px;border-radius:6px;border:2px solid transparent;cursor:pointer;transition:all .15s}
+.scheme-btn:hover,.scheme-btn.active{border-color:var(--text1);transform:scale(1.1)}
+.opt-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text1);margin-bottom:5px;cursor:pointer}
+.opt-row input[type=checkbox]{accent-color:var(--primary);width:14px;height:14px}
+.opt-row input[type=range]{flex:1;accent-color:var(--primary)}
+.cg-main{display:flex;flex-direction:column;gap:10px;min-height:0}
+.cg-chart-header{display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px}
+.cg-chart-title{font-size:15px;font-weight:600;color:var(--text1)}
+.cg-chart-sub{font-size:11px;color:var(--text2);margin-top:2px}
+.cg-chart-actions{display:flex;gap:6px;align-items:center}
+.cg-canvas-wrap{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;position:relative;min-height:0;display:flex;align-items:center;justify-content:center}
+.cg-canvas-wrap canvas{max-height:100%;max-width:100%}
+.cg-empty{text-align:center;color:var(--text2);font-size:13px}
+.cg-empty-icon{font-size:48px;margin-bottom:12px;opacity:.4}
+.cg-loading{position:absolute;inset:0;background:rgba(16,22,36,.7);display:none;align-items:center;justify-content:center;border-radius:10px;font-size:14px;color:var(--text1)}
+.cg-stat-bar{display:flex;gap:8px;flex-wrap:wrap}
+.cg-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:11px}
+.cg-stat-val{font-size:16px;font-weight:700;color:var(--primary)}
+.cg-stat-lbl{color:var(--text2);margin-top:1px}
+.fullscreen-overlay{position:fixed;inset:0;background:#0d1322;z-index:9999;display:none;flex-direction:column;padding:20px;box-sizing:border-box}
+.fullscreen-overlay.open{display:flex}
+.fullscreen-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.fullscreen-title{font-size:18px;font-weight:700;color:#fff}
+.fullscreen-canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center}
+.fullscreen-canvas-wrap canvas{max-height:100%;max-width:100%}
+@media(max-width:900px){.cg-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;overflow:visible}.cg-panel{max-height:40vh}}
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+
+    <div class="topbar">
+      <span class="topbar-title">Analytics</span>
+      <div class="topbar-right" id="topbarActions"></div>
+    </div>
+
+    <div class="page-content" style="padding:16px 20px">
+
+      <!-- Page-level tab bar -->
+      <div class="page-tab-bar">
+        <button class="page-tab-btn" id="page-tab-aging"  onclick="switchTab('aging')">Aging Analysis</button>
+        <button class="page-tab-btn" id="page-tab-charts" onclick="switchTab('charts')">Chart Generator</button>
+      </div>
+
+      <!-- ══ AGING TAB ═══════════════════════════════════════════════ -->
+      <div class="page-tab-pane" id="pane-aging">
+
+        <!-- Hero strip -->
+        <div class="hero-strip">
+          <div class="hero-card ar">
+            <div class="hero-label">Accounts Receivable</div>
+            <div class="hero-value" id="heroAR">—</div>
+            <div class="hero-meta"  id="heroARmeta">Outstanding from ratepayers</div>
+          </div>
+          <div class="hero-card ap">
+            <div class="hero-label">Accounts Payable</div>
+            <div class="hero-value" id="heroAP">—</div>
+            <div class="hero-meta"  id="heroAPmeta">Pending supplier obligations</div>
+          </div>
+          <div class="hero-card crit">
+            <div class="hero-label">Critical Overdue (120+ Days)</div>
+            <div class="hero-value" id="heroCritical">—</div>
+            <div class="hero-meta"  id="heroCriticalMeta">Combined AR &amp; AP</div>
+          </div>
+        </div>
+
+        <!-- Inner tab bar: Debtors / Creditors -->
+        <div class="aging-inner-bar">
+          <button class="aging-inner-btn ar active" id="tabDebtors"   onclick="agingSwitchTab('debtors')">Debtors — Accounts Receivable</button>
+          <button class="aging-inner-btn ap"        id="tabCreditors" onclick="agingSwitchTab('creditors')">Creditors — Accounts Payable</button>
+        </div>
+
+        <!-- ── Debtors panel ── -->
+        <div class="aging-inner-panel active" id="panelDebtors">
+          <div class="section-card">
+            <div class="section-head ar">
+              <div>
+                <div class="section-title">Debtors Aging</div>
+                <div class="section-sub">Outstanding invoice balances owed by ratepayers, categorised by overdue period.</div>
+              </div>
+              <div id="debtorCount" class="count-chip"></div>
+            </div>
+            <div class="section-body">
+
+              <div class="aging-toolbar">
+                <select id="debtorZone" onchange="loadDebtors()">
+                  <option value="">All Zones</option>
+                  <option value="Avondale">Avondale</option><option value="Borrowdale">Borrowdale</option>
+                  <option value="Chitungwiza">Chitungwiza</option><option value="Glen Norah">Glen Norah</option>
+                  <option value="Highfield">Highfield</option><option value="Kuwadzana">Kuwadzana</option>
+                  <option value="Mabvuku">Mabvuku</option><option value="Mbare">Mbare</option>
+                  <option value="Mount Pleasant">Mount Pleasant</option><option value="Southerton">Southerton</option>
+                </select>
+                <div class="search-wrap">
+                  <span class="search-icon">🔍</span>
+                  <input id="debtorSearch" placeholder="Name or account…" oninput="filterDebtors()">
+                </div>
+                <div class="toolbar-sep"></div>
+                <button class="btn btn-primary btn-sm" onclick="loadDebtors()">↻ Refresh</button>
+              </div>
+
+              <div class="dist-wrap" id="debtorDistWrap">
+                <div class="dist-label">Age Distribution</div>
+                <div class="dist-bar" id="debtorDistBar">
+                  <div class="dist-seg" style="background:rgba(39,174,96,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(59,125,216,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(243,156,18,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(230,126,34,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(192,57,43,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(142,68,173,.75)"></div>
+                </div>
+                <div class="dist-legend">
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(39,174,96,.9)"></div>Current</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(59,125,216,.9)"></div>1–30 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(243,156,18,.9)"></div>31–60 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(230,126,34,.9)"></div>61–90 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(192,57,43,.9)"></div>91–120 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(142,68,173,.9)"></div>120+ d</div>
+                </div>
+              </div>
+
+              <div class="bucket-grid" id="debtorBuckets">
+                <div class="bucket-card bc-current"><div class="b-icon">✓</div><div class="b-label">Current</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-30"><div class="b-icon">📅</div><div class="b-label">1–30 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-60"><div class="b-icon">⏳</div><div class="b-label">31–60 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-90"><div class="b-icon">⚡</div><div class="b-label">61–90 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-120"><div class="b-icon">🔴</div><div class="b-label">91–120 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-120plus"><div class="b-icon">⛔</div><div class="b-label">120+ Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+              </div>
+
+              <div class="aging-charts-row">
+                <div class="chart-card"><div class="chart-title">Top Debtors by Balance (Stacked by Age)</div><canvas id="debtorBar" height="130"></canvas></div>
+                <div class="chart-card"><div class="chart-title">Age Distribution</div><canvas id="debtorPie" height="130"></canvas></div>
+              </div>
+
+              <div class="aging-table-wrap">
+                <table>
+                  <thead><tr>
+                    <th style="text-align:left">Account #</th>
+                    <th style="text-align:left;min-width:170px">Ratepayer</th>
+                    <th style="text-align:left">Zone</th>
+                    <th>Inv.</th>
+                    <th class="col-current">Current</th><th class="col-30">1–30 d</th>
+                    <th class="col-60">31–60 d</th><th class="col-90">61–90 d</th>
+                    <th class="col-120">91–120 d</th><th class="col-120plus">120+ d</th>
+                    <th class="col-total">Total</th>
+                  </tr></thead>
+                  <tbody id="debtorTbody">
+                    <tr><td colspan="11" class="text-center text-muted" style="padding:30px">Click Refresh to load data</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div><!-- /panelDebtors -->
+
+        <!-- ── Creditors panel ── -->
+        <div class="aging-inner-panel" id="panelCreditors">
+          <div class="section-card">
+            <div class="section-head ap">
+              <div>
+                <div class="section-title">Creditors Aging</div>
+                <div class="section-sub">Pending expenditures owed to suppliers &amp; contractors, categorised by overdue period.</div>
+              </div>
+              <div id="creditorCount" class="count-chip"></div>
+            </div>
+            <div class="section-body">
+
+              <div class="aging-toolbar">
+                <select id="creditorDept" onchange="loadCreditors()">
+                  <option value="">All Departments</option>
+                  <option value="Town Clerk Department">Town Clerk Department</option>
+                  <option value="Chamber Secretary">Chamber Secretary</option>
+                  <option value="Harare Water Department">Harare Water Department</option>
+                  <option value="City Health Department">City Health Department</option>
+                  <option value="Department of Housing and Community Service">Department of Housing and Community Service</option>
+                  <option value="Department of Works">Department of Works</option>
+                  <option value="Human Capital and Public Services Department">Human Capital and Public Services Department</option>
+                  <option value="Urban Planning Department">Urban Planning Department</option>
+                  <option value="Finance Department">Finance Department</option>
+                </select>
+                <div class="toolbar-sep"></div>
+                <button class="btn btn-primary btn-sm" onclick="loadCreditors()">↻ Refresh</button>
+              </div>
+
+              <div class="dist-wrap" id="creditorDistWrap">
+                <div class="dist-label">Age Distribution</div>
+                <div class="dist-bar" id="creditorDistBar">
+                  <div class="dist-seg" style="background:rgba(39,174,96,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(59,125,216,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(243,156,18,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(230,126,34,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(192,57,43,.75)"></div>
+                  <div class="dist-seg" style="background:rgba(142,68,173,.75)"></div>
+                </div>
+                <div class="dist-legend">
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(39,174,96,.9)"></div>Current</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(59,125,216,.9)"></div>1–30 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(243,156,18,.9)"></div>31–60 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(230,126,34,.9)"></div>61–90 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(192,57,43,.9)"></div>91–120 d</div>
+                  <div class="dist-item"><div class="dist-dot" style="background:rgba(142,68,173,.9)"></div>120+ d</div>
+                </div>
+              </div>
+
+              <div class="bucket-grid" id="creditorBuckets">
+                <div class="bucket-card bc-current"><div class="b-icon">✓</div><div class="b-label">Current</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-30"><div class="b-icon">📅</div><div class="b-label">1–30 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-60"><div class="b-icon">⏳</div><div class="b-label">31–60 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-90"><div class="b-icon">⚡</div><div class="b-label">61–90 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-120"><div class="b-icon">🔴</div><div class="b-label">91–120 Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+                <div class="bucket-card bc-120plus"><div class="b-icon">⛔</div><div class="b-label">120+ Days</div><div class="b-amount">—</div><div class="b-pct">—</div></div>
+              </div>
+
+              <div class="aging-charts-row">
+                <div class="chart-card"><div class="chart-title">Payables by Department (Stacked by Age)</div><canvas id="creditorBar" height="130"></canvas></div>
+                <div class="chart-card"><div class="chart-title">Age Distribution</div><canvas id="creditorPie" height="130"></canvas></div>
+              </div>
+
+              <div class="aging-table-wrap">
+                <table>
+                  <thead><tr>
+                    <th style="text-align:left;min-width:160px">Department</th>
+                    <th>Items</th>
+                    <th class="col-current">Current</th><th class="col-30">1–30 d</th>
+                    <th class="col-60">31–60 d</th><th class="col-90">61–90 d</th>
+                    <th class="col-120">91–120 d</th><th class="col-120plus">120+ d</th>
+                    <th class="col-total">Total</th>
+                  </tr></thead>
+                  <tbody id="creditorTbody">
+                    <tr><td colspan="9" class="text-center text-muted" style="padding:30px">Click Refresh to load data</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <button class="detail-toggle" id="detailToggleBtn" onclick="toggleDetail()">
+                <span>📄 Individual Expenditure Detail</span>
+                <span class="chev">▾</span>
+              </button>
+              <div class="detail-panel" id="detailPanel">
+                <div class="detail-panel-hdr">Pending Expenditure Detail</div>
+                <div style="overflow-x:auto">
+                  <table>
+                    <thead><tr>
+                      <th>Reference</th><th>Department</th><th>Description</th>
+                      <th style="text-align:right">Amount</th><th>Budget Line</th><th>Date</th>
+                      <th style="text-align:right">Days Out.</th><th>Bucket</th>
+                    </tr></thead>
+                    <tbody id="detailTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div><!-- /panelCreditors -->
+
+      </div><!-- /pane-aging -->
+
+      <!-- ══ CHARTS TAB ══════════════════════════════════════════════ -->
+      <div class="page-tab-pane" id="pane-charts">
+        <div class="cg-layout">
+
+          <!-- Control panel -->
+          <div class="cg-panel">
+            <div class="cg-section">
+              <div class="cg-section-title">Quick Charts</div>
+              <div class="preset-grid" id="presetGrid"></div>
+            </div>
+            <div class="cg-section">
+              <div class="cg-section-title">Chart Type</div>
+              <div class="type-pills" id="typePills">
+                <button class="type-pill active" data-type="bar"       onclick="setType('bar',this)">Bar</button>
+                <button class="type-pill"        data-type="line"      onclick="setType('line',this)">Line</button>
+                <button class="type-pill"        data-type="pie"       onclick="setType('pie',this)">Pie</button>
+                <button class="type-pill"        data-type="doughnut"  onclick="setType('doughnut',this)">Doughnut</button>
+                <button class="type-pill"        data-type="radar"     onclick="setType('radar',this)">Radar</button>
+                <button class="type-pill"        data-type="polarArea" onclick="setType('polarArea',this)">Polar</button>
+              </div>
+            </div>
+            <div class="cg-section">
+              <div class="cg-section-title">Color Scheme</div>
+              <div class="scheme-grid" id="schemeGrid"></div>
+            </div>
+            <div class="cg-section">
+              <div class="cg-section-title">Options</div>
+              <label class="opt-row"><input type="checkbox" id="optLegend" checked onchange="redraw()"> Show Legend</label>
+              <label class="opt-row"><input type="checkbox" id="optGrid"   checked onchange="redraw()"> Show Grid Lines</label>
+              <label class="opt-row"><input type="checkbox" id="optValues"       onchange="redraw()"> Show Values on Chart</label>
+              <label class="opt-row"><input type="checkbox" id="optSmooth" checked onchange="redraw()"> Smooth Lines</label>
+              <label class="opt-row" style="margin-top:6px">
+                <span style="white-space:nowrap;min-width:80px">Bar Width</span>
+                <input type="range" id="optBarWidth" min="0.3" max="1" step="0.05" value="0.7" onchange="redraw()">
+              </label>
+            </div>
+          </div>
+
+          <!-- Chart main area -->
+          <div class="cg-main">
+            <div class="cg-chart-header">
+              <div>
+                <div class="cg-chart-title" id="chartTitle">Select a chart from the Quick Charts panel</div>
+                <div class="cg-chart-sub"   id="chartSub">Choose a preset to load data, then customise the type and colours.</div>
+              </div>
+              <div class="cg-chart-actions">
+                <span id="chartGenAt" style="font-size:11px;color:var(--text2)"></span>
+              </div>
+            </div>
+            <div id="statBar" class="cg-stat-bar" style="display:none"></div>
+            <div class="cg-canvas-wrap" id="canvasWrap">
+              <div class="cg-empty" id="chartEmpty">
+                <div class="cg-empty-icon">📊</div>
+                <div>Select a chart preset to get started</div>
+                <div style="margin-top:6px;font-size:11px">Charts can be exported as PNG or PDF using the buttons above</div>
+              </div>
+              <canvas id="mainChart" style="display:none;max-height:420px"></canvas>
+              <div class="cg-loading" id="chartLoading">⏳ Loading data...</div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /pane-charts -->
+
+    </div>
+  </div>
+</div>
+
+<!-- Fullscreen overlay (outside layout so position:fixed works) -->
+<div class="fullscreen-overlay" id="fullscreenOverlay">
+  <div class="fullscreen-header">
+    <span class="fullscreen-title" id="fsTitle"></span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="downloadChartAsPNG('fsChart','chart_fullscreen.png')">⬇ PNG</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportChartAsPDF('fsChart',currentTitle,'chart_fullscreen.pdf')">⬇ PDF</button>
+      <button class="btn btn-primary btn-sm"   onclick="closeFullscreen()">✕ Close</button>
+    </div>
+  </div>
+  <div class="fullscreen-canvas-wrap">
+    <canvas id="fsChart"></canvas>
+  </div>
+</div>
+
+<script src="../js/shared.js"></script>
+<script>
+requireAuth(); buildSidebar('analytics');
+Chart.defaults.color       = '#8892a4';
+Chart.defaults.borderColor = '#2a3347';
+
+/* ── Outer tab switching ─────────────────────────────────────────── */
+
+function switchTab(tab) {
+  document.querySelectorAll('.page-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.page-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+  document.getElementById('page-tab-' + tab).classList.add('active');
+  renderTopbarActions(tab);
+  setUrlParam('tab', tab === 'aging' ? null : tab);
+}
+
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'aging') {
+    el.innerHTML = `
+      <div class="export-group">
+        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/aging/debtors?format=csv','debtors_aging.csv')">↓ AR CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/aging/debtors?format=xlsx','debtors_aging.xlsx')">↓ AR Excel</button>
+        <span class="export-sep">|</span>
+        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/aging/creditors?format=csv','creditors_aging.csv')">↓ AP CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/aging/creditors?format=xlsx','creditors_aging.xlsx')">↓ AP Excel</button>
+        <span class="export-sep">|</span>
+        <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Debtors Aging Analysis','debtorTbody','debtors_aging.pdf','Accounts Receivable')">↓ AR PDF</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportTablePDF('Creditors Aging Analysis','creditorTbody','creditors_aging.pdf','Accounts Payable')">↓ AP PDF</button>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <button class="btn btn-secondary btn-sm" id="btnPNG"  onclick="downloadChartAsPNG('mainChart',currentTitle.replace(/ /g,'_')+'.png')" disabled>⬇ PNG</button>
+      <button class="btn btn-secondary btn-sm" id="btnPDF"  onclick="exportChartAsPDF('mainChart',currentTitle,currentTitle.replace(/ /g,'_')+'.pdf',currentSubtitle)" disabled>⬇ PDF</button>
+      <button class="btn btn-secondary btn-sm" id="btnFull" onclick="openFullscreen()" disabled>⛶ Fullscreen</button>`;
+  }
+}
+
+/* ── Aging: inner tab switching ─────────────────────────────────── */
+
+function agingSwitchTab(name) {
+  document.querySelectorAll('.aging-inner-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.aging-inner-btn').forEach(b => b.classList.remove('active'));
+  const cap = name.charAt(0).toUpperCase() + name.slice(1);
+  document.getElementById('panel' + cap).classList.add('active');
+  document.getElementById('tab'   + cap).classList.add('active');
+}
+
+/* ── Aging: constants ───────────────────────────────────────────── */
+
+const BUCKET_KEYS   = ['current','days_1_30','days_31_60','days_61_90','days_91_120','days_120_plus'];
+const BUCKET_LABELS = ['Current','1–30 Days','31–60 Days','61–90 Days','91–120 Days','120+ Days'];
+const BUCKET_COLORS = [
+  'rgba(39,174,96,0.72)','rgba(59,125,216,0.72)','rgba(243,156,18,0.72)',
+  'rgba(230,126,34,0.72)','rgba(192,57,43,0.72)','rgba(142,68,173,0.72)'
+];
+const COL_CLS = ['col-current','col-30','col-60','col-90','col-120','col-120plus'];
+
+let debtorBarChart = null, debtorPieChart = null;
+let creditorBarChart = null, creditorPieChart = null;
+let allDebtorRows = [];
+let _ar120 = 0, _ap120 = 0;
+
+function $(id) { return document.getElementById(id); }
+
+function fmtCell(v) {
+  if (!v || v === 0) return `<span class="zero-cell">—</span>`;
+  return fmtMoney(v);
+}
+
+function riskPill(row) {
+  if (!row.total) return '';
+  const p120 = row.days_120_plus / row.total;
+  const p90  = (row.days_91_120 + row.days_120_plus) / row.total;
+  if (p120 > .5)  return `<span class="risk-pill risk-critical">Critical</span>`;
+  if (p90  > .5)  return `<span class="risk-pill risk-high">High Risk</span>`;
+  if (p90  > .25) return `<span class="risk-pill risk-medium">At Risk</span>`;
+  return '';
+}
+
+function updateDistBar(barId, wrapId, totals) {
+  const segs = $(barId).querySelectorAll('.dist-seg');
+  BUCKET_KEYS.forEach((k, i) => {
+    const pct = totals.total > 0 ? ((totals[k] || 0) / totals.total * 100).toFixed(2) : 0;
+    segs[i].style.width = pct + '%';
+  });
+  $(wrapId).style.display = 'block';
+}
+
+function renderBuckets(containerId, totals) {
+  const cards = $(containerId).querySelectorAll('.bucket-card');
+  BUCKET_KEYS.forEach((k, i) => {
+    const v   = totals[k] || 0;
+    const pct = totals.total > 0 ? (v / totals.total * 100).toFixed(1) : '0.0';
+    cards[i].querySelector('.b-amount').textContent = fmtMoney(v);
+    cards[i].querySelector('.b-pct').textContent    = pct + '%';
+    let bar = cards[i].querySelector('.b-bar');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'b-bar'; cards[i].appendChild(bar); }
+    bar.style.width      = pct + '%';
+    bar.style.background = BUCKET_COLORS[i].replace('0.72', '1');
+  });
+}
+
+function buildAgingBarChart(canvasId, labels, datasets) {
+  return new Chart($(canvasId), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 9 }, boxWidth: 10, padding: 8 } } },
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 9 } } },
+        y: { stacked: true, beginAtZero: true,
+          ticks: { font: { size: 9 }, callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v) } }
+      }
+    }
+  });
+}
+
+function buildAgingPieChart(canvasId, labels, data) {
+  return new Chart($(canvasId), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: BUCKET_COLORS, borderWidth: 1, borderColor: 'rgba(0,0,0,.25)' }] },
+    options: {
+      responsive: true, cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 9 }, boxWidth: 10, padding: 6 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: $${ctx.raw.toLocaleString(undefined,{minimumFractionDigits:2})}` } }
+      }
+    }
+  });
+}
+
+function syncCriticalHero() {
+  $('heroCritical').textContent     = fmtMoney(_ar120 + _ap120);
+  $('heroCriticalMeta').textContent = `AR: ${fmtMoney(_ar120)}  ·  AP: ${fmtMoney(_ap120)}`;
+}
+
+/* ── Aging: debtors ─────────────────────────────────────────────── */
+
+async function loadDebtors() {
+  const zone = $('debtorZone').value;
+  try {
+    let url = '/api/aging/debtors?format=json';
+    if (zone) url += `&zone=${encodeURIComponent(zone)}`;
+    const data = await apiFetch(url);
+    allDebtorRows = data.rows;
+    renderDebtors(data);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderDebtors(data) {
+  const { rows, totals } = data;
+  $('debtorCount').textContent = `${rows.length} debtor${rows.length !== 1 ? 's' : ''}  ·  ${fmtMoney(totals.total)}`;
+  renderBuckets('debtorBuckets', totals);
+  updateDistBar('debtorDistBar', 'debtorDistWrap', totals);
+  $('heroAR').textContent     = fmtMoney(totals.total);
+  $('heroARmeta').textContent = `${rows.length} active debtor${rows.length !== 1 ? 's' : ''}`;
+  _ar120 = totals.days_120_plus || 0;
+  syncCriticalHero();
+
+  const top12 = [...rows].sort((a,b) => b.total - a.total).slice(0, 12);
+  if (debtorBarChart) debtorBarChart.destroy();
+  if (debtorPieChart) debtorPieChart.destroy();
+  debtorBarChart = buildAgingBarChart('debtorBar',
+    top12.map(r => r.ratepayer_name.split(' ').slice(0,2).join(' ')),
+    BUCKET_KEYS.map((k, i) => ({ label: BUCKET_LABELS[i], data: top12.map(r => r[k] || 0), backgroundColor: BUCKET_COLORS[i] }))
+  );
+  debtorPieChart = buildAgingPieChart('debtorPie', BUCKET_LABELS, BUCKET_KEYS.map(k => totals[k] || 0));
+  renderDebtorTable(rows, totals);
+}
+
+function filterDebtors() {
+  const q = $('debtorSearch').value.toLowerCase();
+  const filtered = q
+    ? allDebtorRows.filter(r => r.ratepayer_name.toLowerCase().includes(q) || r.account_number.toLowerCase().includes(q))
+    : allDebtorRows;
+  const totals = {};
+  BUCKET_KEYS.forEach(k => { totals[k] = Math.round(filtered.reduce((s,r) => s+(r[k]||0), 0)*100)/100; });
+  totals.total = Math.round(filtered.reduce((s,r) => s+(r.total||0), 0)*100)/100;
+  renderDebtorTable(filtered, totals);
+  $('debtorCount').textContent = `${filtered.length} debtor${filtered.length !== 1 ? 's' : ''}  ·  ${fmtMoney(totals.total)}`;
+}
+
+function renderDebtorTable(rows, totals) {
+  $('debtorTbody').innerHTML = rows.length === 0
+    ? '<tr><td colspan="11" class="text-center text-muted" style="padding:30px">No outstanding debtors found</td></tr>'
+    : rows.map(r => `<tr>
+        <td><code style="font-size:10px;color:var(--primary-light)">${r.account_number}</code></td>
+        <td style="font-weight:500">${r.ratepayer_name}${riskPill(r)}
+          <div style="margin-top:3px;display:flex;gap:3px;flex-wrap:wrap">
+            <a class="btn btn-sm btn-secondary" style="font-size:9px;padding:1px 6px" href="${pageUrl('billing.html',{tab:'invoices',ratepayer_id:r.ratepayer_id})}">Invoices</a>
+            <a class="btn btn-sm btn-secondary" style="font-size:9px;padding:1px 6px" href="${pageUrl('payments.html',{ratepayer_id:r.ratepayer_id})}">Payments</a>
+            <a class="btn btn-sm btn-secondary" style="font-size:9px;padding:1px 6px" href="${pageUrl('ratepayers.html',{search:r.account_number})}">Profile</a>
+          </div>
+        </td>
+        <td style="color:var(--text2)">${r.zone}</td>
+        <td>${r.invoice_count}</td>
+        ${BUCKET_KEYS.map((k,i) => `<td class="${COL_CLS[i]}">${fmtCell(r[k])}</td>`).join('')}
+        <td class="col-total">${fmtMoney(r.total)}</td>
+      </tr>`).join('') +
+    `<tr class="total-row">
+      <td colspan="3" style="text-align:left">TOTAL</td>
+      <td>${rows.reduce((s,r) => s+r.invoice_count, 0)}</td>
+      ${BUCKET_KEYS.map((k,i) => `<td class="${COL_CLS[i]}">${fmtMoney(totals[k]||0)}</td>`).join('')}
+      <td class="col-total">${fmtMoney(totals.total)}</td>
+    </tr>`;
+}
+
+/* ── Aging: creditors ───────────────────────────────────────────── */
+
+async function loadCreditors() {
+  const dept = $('creditorDept').value;
+  try {
+    let url = '/api/aging/creditors?format=json';
+    if (dept) url += `&department=${encodeURIComponent(dept)}`;
+    const data = await apiFetch(url);
+    const { rows, totals, detail } = data;
+    const totalItems = rows.reduce((s,r) => s+r.expenditure_count, 0);
+
+    $('creditorCount').textContent = `${rows.length} dept${rows.length !== 1 ? 's' : ''}  ·  ${fmtMoney(totals.total)}`;
+    renderBuckets('creditorBuckets', totals);
+    updateDistBar('creditorDistBar', 'creditorDistWrap', totals);
+    $('heroAP').textContent     = fmtMoney(totals.total);
+    $('heroAPmeta').textContent = `${totalItems} pending item${totalItems !== 1 ? 's' : ''}`;
+    _ap120 = totals.days_120_plus || 0;
+    syncCriticalHero();
+
+    if (creditorBarChart) creditorBarChart.destroy();
+    if (creditorPieChart) creditorPieChart.destroy();
+    creditorBarChart = buildAgingBarChart('creditorBar',
+      rows.map(r => r.department),
+      BUCKET_KEYS.map((k, i) => ({ label: BUCKET_LABELS[i], data: rows.map(r => r[k]||0), backgroundColor: BUCKET_COLORS[i] }))
+    );
+    creditorPieChart = buildAgingPieChart('creditorPie', BUCKET_LABELS, BUCKET_KEYS.map(k => totals[k]||0));
+
+    const bucketLabel = {
+      current:'Current', days_1_30:'1–30 Days', days_31_60:'31–60 Days',
+      days_61_90:'61–90 Days', days_91_120:'91–120 Days', days_120_plus:'120+ Days'
+    };
+
+    $('creditorTbody').innerHTML = rows.length === 0
+      ? '<tr><td colspan="9" class="text-center text-muted" style="padding:30px">No pending creditor items found</td></tr>'
+      : rows.map(r => `<tr>
+          <td style="font-weight:500">${r.department}</td>
+          <td>${r.expenditure_count}</td>
+          ${BUCKET_KEYS.map((k,i) => `<td class="${COL_CLS[i]}">${fmtCell(r[k])}</td>`).join('')}
+          <td class="col-total">${fmtMoney(r.total)}</td>
+        </tr>`).join('') +
+      `<tr class="total-row">
+        <td style="text-align:left">TOTAL</td><td>${totalItems}</td>
+        ${BUCKET_KEYS.map((k,i) => `<td class="${COL_CLS[i]}">${fmtMoney(totals[k]||0)}</td>`).join('')}
+        <td class="col-total">${fmtMoney(totals.total)}</td>
+      </tr>`;
+
+    $('detailTbody').innerHTML = detail.length === 0
+      ? '<tr><td colspan="8" class="text-center text-muted" style="padding:20px">No pending items</td></tr>'
+      : detail.map(e => `<tr>
+          <td><code style="font-size:10px;color:var(--gold)">${e.reference_number}</code></td>
+          <td>${e.department}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${e.description}">${e.description}</td>
+          <td style="text-align:right;font-weight:600">${fmtMoney(e.amount)}</td>
+          <td style="font-size:10.5px;color:var(--text2)">${e.budget_line}</td>
+          <td style="font-size:10.5px;color:var(--text2)">${e.expenditure_date}</td>
+          <td style="text-align:right;font-weight:${e.days_outstanding>90?'600':'400'};color:${e.days_outstanding>90?'var(--danger)':e.days_outstanding>30?'var(--warning)':'var(--text2)'}">${e.days_outstanding}</td>
+          <td><span class="badge badge-info" style="font-size:9px">${bucketLabel[e.bucket]||e.bucket}</span></td>
+        </tr>`).join('');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+let detailOpen = false;
+function toggleDetail() {
+  detailOpen = !detailOpen;
+  $('detailPanel').classList.toggle('open', detailOpen);
+  $('detailToggleBtn').classList.toggle('open', detailOpen);
+}
+
+/* ── Charts: state ──────────────────────────────────────────────── */
+
+let currentChart    = null;
+let fsChart         = null;
+let currentData     = null;
+let currentType     = 'bar';
+let currentScheme   = 0;
+let currentTitle    = 'Chart';
+let currentSubtitle = '';
+let currentPreset   = null;
+
+const SCHEMES = [
+  { name:'COH Official',  swatch:'linear-gradient(135deg,#1F3864,#2E5FA3,#27ae60)', colors:['#2E5FA3','#27ae60','#f39c12','#e74c3c','#9b59b6','#1abc9c','#e67e22','#3498db','#e91e63','#00bcd4'] },
+  { name:'Blue Ocean',    swatch:'linear-gradient(135deg,#0077b6,#48cae4,#90e0ef)', colors:['#0077b6','#0096c7','#00b4d8','#48cae4','#90e0ef','#ade8f4','#caf0f8','#023e8a','#03045e','#0096c7'] },
+  { name:'Warm Tones',    swatch:'linear-gradient(135deg,#d62828,#f77f00,#fcbf49)', colors:['#d62828','#f77f00','#fcbf49','#eae2b7','#c77dff','#9d4edd','#7b2d8b','#e63946','#ff6b6b','#ffd166'] },
+  { name:'Nature Green',  swatch:'linear-gradient(135deg,#1b4332,#40916c,#b7e4c7)', colors:['#1b4332','#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#27ae60','#16a085','#117a65'] },
+  { name:'Sunset',        swatch:'linear-gradient(135deg,#ff6b6b,#feca57,#ff9ff3)', colors:['#ff6b6b','#feca57','#48dbfb','#ff9ff3','#54a0ff','#5f27cd','#00d2d3','#ff9f43','#ee5a24','#0abde3'] }
+];
+
+const PRESETS = [
+  { id:'revenue-category',       icon:'💰', label:'Revenue\nby Category',       title:'Revenue by Category',                    sub:'Total billed vs collected per revenue stream',           defaultType:'bar',      allowedTypes:['bar','pie','doughnut','radar','polarArea'],
+    load: async () => { const d = await apiFetch('/api/dashboard/revenue-by-category'); return { labels:d.map(r=>r.category), datasets:[{label:'Billed',data:d.map(r=>r.billed)},{label:'Collected',data:d.map(r=>r.collected)}], stats:[{val:fmtMoney(d.reduce((s,r)=>s+r.billed,0)),lbl:'Total Billed'},{val:fmtMoney(d.reduce((s,r)=>s+r.collected,0)),lbl:'Total Collected'},{val:d.length+' cats',lbl:'Categories'}] }; }
+  },
+  { id:'monthly-trend',          icon:'📈', label:'Monthly\nRevenue Trend',      title:'Monthly Revenue Trend (Last 6 Months)',  sub:'Billed vs collected per month',                          defaultType:'line',     allowedTypes:['line','bar'],
+    load: async () => { const d = await apiFetch('/api/dashboard/monthly-trend'); return { labels:d.map(r=>r.month), datasets:[{label:'Billed',data:d.map(r=>r.billed)},{label:'Collected',data:d.map(r=>r.collected)}], stats:[{val:fmtMoney(d.reduce((s,r)=>s+r.billed,0)),lbl:'Total Billed'},{val:fmtMoney(d.reduce((s,r)=>s+r.collected,0)),lbl:'Total Collected'}] }; }
+  },
+  { id:'collection-trend',       icon:'📉', label:'Collection\nRate Trend',      title:'Collection Rate Trend (12 Months)',      sub:'Month-by-month collection rate %',                       defaultType:'line',     allowedTypes:['line','bar'],
+    load: async () => { const d = await apiFetch('/api/reports/collection-rate-trend?months=12'); const avg = d.length?(d.reduce((s,r)=>s+r.collection_rate,0)/d.length).toFixed(1):0; return { labels:d.map(r=>r.month), datasets:[{label:'Collection Rate %',data:d.map(r=>r.collection_rate)},{label:'Leakage Gap (USD)',data:d.map(r=>r.leakage_gap),yAxisID:'y1'}], stats:[{val:avg+'%',lbl:'Avg Collection Rate'},{val:fmtMoney(d.reduce((s,r)=>s+r.leakage_gap,0)),lbl:'Total Leakage Gap'},{val:fmtMoney(d.reduce((s,r)=>s+r.collected,0)),lbl:'Total Collected'}] }; }
+  },
+  { id:'budget-variance',        icon:'🏛',  label:'Budget\nVariance',            title:'Budget Variance by Department',          sub:'Allocated budget vs actual spending',                    defaultType:'bar',      allowedTypes:['bar','radar'],
+    load: async () => { const d = await apiFetch('/api/reports/budget-variance'); const rows=d.variance||d; if(!Array.isArray(rows)||!rows.length) return{labels:[],datasets:[],stats:[]}; return{labels:rows.map(r=>r.department),datasets:[{label:'Allocated',data:rows.map(r=>r.allocated)},{label:'Spent',data:rows.map(r=>r.actual_spent)}],stats:[{val:fmtMoney(rows.reduce((s,r)=>s+(r.allocated||0),0)),lbl:'Total Budget'},{val:fmtMoney(rows.reduce((s,r)=>s+(r.actual_spent||0),0)),lbl:'Total Spent'}]}; }
+  },
+  { id:'cashflow-forecast',      icon:'🔮', label:'Cashflow\nForecast',          title:'Cashflow Forecast (Next 6 Months)',      sub:'Projected inflows vs outflows',                          defaultType:'bar',      allowedTypes:['bar','line'],
+    load: async () => { const d = await apiFetch('/api/reports/cashflow-forecast?months=6'); const rows=d.forecast||d; return{labels:rows.map(r=>r.month||r.period),datasets:[{label:'Expected Receipts',data:rows.map(r=>r.expected_receipts)},{label:'Expected Payments',data:rows.map(r=>r.expected_payments)},{label:'Net Cashflow',data:rows.map(r=>r.net_cashflow)}],stats:[{val:fmtMoney(rows.reduce((s,r)=>s+(r.expected_receipts||0),0)),lbl:'Projected Receipts'},{val:fmtMoney(rows.reduce((s,r)=>s+(r.net_cashflow||0),0)),lbl:'Net Position'}]}; }
+  },
+  { id:'officer-performance',    icon:'👤', label:'Officer\nPerformance',        title:'Revenue Officer Performance',            sub:'Collection targets vs actual per officer',               defaultType:'bar',      allowedTypes:['bar','radar'],
+    load: async () => { const d = await apiFetch('/api/reports/officer-performance'); const rows=d.officers||d; if(!Array.isArray(rows)||!rows.length) return{labels:[],datasets:[],stats:[]}; return{labels:rows.map(r=>r.officer),datasets:[{label:'Billed',data:rows.map(r=>r.billed)},{label:'Collected',data:rows.map(r=>r.collected)}],stats:[{val:rows.length+' officers',lbl:'Active Officers'},{val:fmtMoney(rows.reduce((s,r)=>s+(r.collected||0),0)),lbl:'Total Collected'}]}; }
+  },
+  { id:'leakage-summary',        icon:'🔴', label:'Leakage\nAnalysis',           title:'Revenue Leakage Analysis',               sub:'Alerts by type and severity',                            defaultType:'doughnut', allowedTypes:['doughnut','pie','bar','polarArea'],
+    load: async () => { const d = await apiFetch('/api/leakage/summary'); const bySev=d.by_severity||{}; const sevLabels=Object.keys(bySev); const labels=sevLabels.length?sevLabels:['No data']; const data=sevLabels.length?sevLabels.map(k=>bySev[k]):[0]; return{labels,datasets:[{label:'Alerts by Severity',data}],stats:[{val:d.total_active||0,lbl:'Active Alerts'},{val:d.total_resolved||0,lbl:'Resolved'},{val:fmtMoney(d.leakage_estimate||0),lbl:'Est. Leakage'}]}; }
+  },
+  { id:'debtors-aging',          icon:'⏳', label:'Debtors\nAging',              title:'Debtors Aging Analysis (AR)',            sub:'Outstanding balances by aging bucket',                   defaultType:'bar',      allowedTypes:['bar','doughnut','pie'],
+    load: async () => { const d = await apiFetch('/api/aging/debtors'); const buckets=d.buckets||d.summary||[]; if(!buckets.length) return{labels:[],datasets:[],stats:[]}; return{labels:buckets.map(b=>b.bucket||b.range),datasets:[{label:'Amount Outstanding (USD)',data:buckets.map(b=>b.amount||b.balance||0)}],stats:[{val:d.total_debtors||buckets.length+' buckets',lbl:'Debtors'},{val:fmtMoney(d.total_outstanding||buckets.reduce((s,b)=>s+(b.amount||0),0)),lbl:'Total Outstanding'}]}; }
+  },
+  { id:'revenue-targets-history',icon:'📅', label:'COH Revenue\n2021–2025',      title:'City of Harare Historical Revenue (2021–2025)', sub:'Annual receipts from COH official financial dataset', defaultType:'line',     allowedTypes:['line','bar'],
+    load: async () => { const d = await apiFetch('/api/revenue-targets'); if(!d.length) return{labels:[],datasets:[],stats:[{val:'0',lbl:'Load COH data first via Reports → Load COH Data'}]}; const years=[...new Set(d.map(r=>r.fiscal_year))].sort(); const cats=[...new Set(d.map(r=>r.category))]; const datasets=cats.map(cat=>({label:cat.charAt(0).toUpperCase()+cat.slice(1),data:years.map(yr=>{const rec=d.find(r=>r.fiscal_year===yr&&r.category===cat);return rec?rec.target_amount:0;})})); const totByYear=years.map(yr=>d.filter(r=>r.fiscal_year===yr).reduce((s,r)=>s+r.target_amount,0)); return{labels:years,datasets,stats:[{val:years.length+' years',lbl:'Period'},{val:fmtMoney(Math.max(...totByYear)),lbl:'Peak Year Revenue'},{val:cats.length+' categories',lbl:'Revenue Categories'}]}; }
+  },
+  { id:'financial-summary',      icon:'📋', label:'Financial\nSummary',          title:'Financial Summary by Category',          sub:'Billed, collected and outstanding per revenue category', defaultType:'bar',      allowedTypes:['bar','radar','doughnut'],
+    load: async () => { const d = await apiFetch('/api/reports/financial-summary'); const rows=d.by_category||d.rows||d; if(!Array.isArray(rows)||!rows.length) return{labels:[],datasets:[],stats:[]}; return{labels:rows.map(r=>r.category),datasets:[{label:'Billed',data:rows.map(r=>r.billed||0)},{label:'Collected',data:rows.map(r=>r.collected||0)},{label:'Outstanding',data:rows.map(r=>r.outstanding||r.balance||0)}],stats:[{val:fmtMoney(rows.reduce((s,r)=>s+(r.billed||0),0)),lbl:'Total Billed'},{val:fmtMoney(rows.reduce((s,r)=>s+(r.collected||0),0)),lbl:'Total Collected'}]}; }
+  },
+  { id:'invoice-status',         icon:'📄', label:'Invoice\nStatus',             title:'Invoice Distribution by Status',         sub:'Breakdown of invoice statuses across all records',       defaultType:'doughnut', allowedTypes:['doughnut','pie','bar','polarArea'],
+    load: async () => { const d = await apiFetch('/api/invoices?limit=5000'); const items=d.items||d; const sc={},sa={}; (items||[]).forEach(inv=>{sc[inv.status]=(sc[inv.status]||0)+1;sa[inv.status]=(sa[inv.status]||0)+(inv.amount||0);}); const labels=Object.keys(sc); return{labels,datasets:[{label:'Invoice Count',data:labels.map(s=>sc[s])}],stats:[{val:items.length+' total',lbl:'Invoices'},{val:fmtMoney(items.reduce((s,i)=>s+(i.amount||0),0)),lbl:'Total Value'}]}; }
+  },
+  { id:'payment-methods',        icon:'💳', label:'Payment\nMethods',            title:'Payment Method Distribution',            sub:'How payments are being made (cash, transfer, mobile)',   defaultType:'pie',      allowedTypes:['pie','doughnut','bar','polarArea'],
+    load: async () => { const d = await apiFetch('/api/payments?limit=5000'); const items=d.items||d; const mc={},ma={}; (items||[]).forEach(p=>{const m=p.payment_method||p.method||'unknown';mc[m]=(mc[m]||0)+1;ma[m]=(ma[m]||0)+(p.amount||0);}); const labels=Object.keys(mc); return{labels,datasets:[{label:'Count',data:labels.map(m=>mc[m])},{label:'Amount (USD)',data:labels.map(m=>ma[m])}],stats:[{val:items.length+' payments',lbl:'Total Payments'},{val:fmtMoney(items.reduce((s,p)=>s+(p.amount||0),0)),lbl:'Total Amount'}]}; }
+  }
+];
+
+function buildPresets() {
+  document.getElementById('presetGrid').innerHTML = PRESETS.map(p =>
+    `<button class="preset-btn" id="preset-${p.id}" onclick="loadPreset('${p.id}')"><span class="preset-icon">${p.icon}</span>${p.label}</button>`
+  ).join('');
+}
+
+function buildSchemes() {
+  document.getElementById('schemeGrid').innerHTML = SCHEMES.map((s, i) =>
+    `<button class="scheme-btn ${i===0?'active':''}" title="${s.name}" style="background:${s.swatch}" onclick="setScheme(${i},this)"></button>`
+  ).join('');
+}
+
+async function loadPreset(id) {
+  const preset = PRESETS.find(p => p.id === id);
+  if (!preset) return;
+  currentPreset = preset;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('preset-' + id)?.classList.add('active');
+  document.querySelectorAll('.type-pill').forEach(pill => {
+    const allowed = preset.allowedTypes || ['bar','line','pie','doughnut','radar','polarArea'];
+    pill.style.opacity       = allowed.includes(pill.dataset.type) ? '1' : '0.35';
+    pill.style.pointerEvents = allowed.includes(pill.dataset.type) ? 'auto' : 'none';
+  });
+  if (!preset.allowedTypes.includes(currentType)) {
+    setType(preset.defaultType, document.querySelector(`.type-pill[data-type="${preset.defaultType}"]`));
+  }
+  currentTitle    = preset.title;
+  currentSubtitle = preset.sub;
+  document.getElementById('chartTitle').textContent = preset.title;
+  document.getElementById('chartSub').textContent   = preset.sub;
+  document.getElementById('chartGenAt').textContent = '';
+  setLoading(true);
+  try {
+    currentData = await preset.load();
+    renderChart();
+    renderStats(currentData.stats || []);
+    document.getElementById('chartGenAt').textContent = 'Generated ' + new Date().toLocaleTimeString('en-GB');
+    ['btnPNG','btnPDF','btnFull'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+  } catch(e) {
+    toast('Failed to load chart data: ' + e.message, 'error');
+    setLoading(false);
+  }
+}
+
+function renderChart() {
+  if (!currentData) return;
+  setLoading(false);
+  const canvas = document.getElementById('mainChart');
+  const empty  = document.getElementById('chartEmpty');
+  canvas.style.display = 'block';
+  empty.style.display  = 'none';
+  if (currentChart) { currentChart.destroy(); currentChart = null; }
+  const scheme = SCHEMES[currentScheme].colors;
+  const smooth = document.getElementById('optSmooth').checked;
+  const legend = document.getElementById('optLegend').checked;
+  const grid   = document.getElementById('optGrid').checked;
+  const values = document.getElementById('optValues').checked;
+  const barW   = parseFloat(document.getElementById('optBarWidth').value);
+  const isPie  = ['pie','doughnut','polarArea'].includes(currentType);
+  const styledDs = currentData.datasets.map((ds, i) => {
+    const color = scheme[i % scheme.length];
+    return {
+      ...ds,
+      backgroundColor: isPie ? currentData.labels.map((_,li) => scheme[li%scheme.length]+'cc') : color+'99',
+      borderColor: isPie ? scheme.map(c=>c) : color,
+      borderWidth: 2, tension: smooth ? 0.4 : 0,
+      fill: currentType === 'line' ? false : undefined,
+      pointBackgroundColor: color, pointRadius: currentType === 'line' ? 4 : undefined,
+      barPercentage: barW, categoryPercentage: 0.8
+    };
+  });
+  const dualAxis = currentData.datasets.some(d => d.yAxisID === 'y1');
+  const scales = isPie ? {} : {
+    y: { beginAtZero:true, grid:{ color: grid?'rgba(255,255,255,.06)':'transparent' },
+      ticks:{ callback: v => currentType==='radar'?v:(v>=1000000?'$'+(v/1000000).toFixed(1)+'M':v>=1000?'$'+(v/1000).toFixed(0)+'K':(v>1?'$'+v.toLocaleString():v+'%')) } },
+    ...(dualAxis ? { y1:{ position:'right', beginAtZero:true, grid:{drawOnChartArea:false}, ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'K'} } } : {})
+  };
+  currentChart = new Chart(canvas, {
+    type: currentType,
+    data: { labels: currentData.labels, datasets: styledDs },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      plugins: {
+        legend:{ display:legend, position:'bottom', labels:{ font:{size:11}, boxWidth:12, color:'#8892a4' } },
+        tooltip:{ callbacks:{ label: ctx => { const v=ctx.raw; if(typeof v!=='number') return ` ${ctx.dataset.label}: ${v}`; return v>100?` ${ctx.dataset.label}: $${v.toLocaleString(undefined,{minimumFractionDigits:2})}`:` ${ctx.dataset.label}: ${v}%`; } } }
+      },
+      scales, cutout: currentType==='doughnut'?'55%':undefined
+    }
+  });
+}
+
+function renderStats(stats) {
+  const bar = document.getElementById('statBar');
+  if (!stats || !stats.length) { bar.style.display='none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = stats.map(s => `<div class="cg-stat"><div class="cg-stat-val">${s.val}</div><div class="cg-stat-lbl">${s.lbl}</div></div>`).join('');
+}
+
+function setType(type, btn) {
+  currentType = type;
+  document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (currentData) renderChart();
+}
+
+function setScheme(idx, btn) {
+  currentScheme = idx;
+  document.querySelectorAll('.scheme-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (currentData) renderChart();
+}
+
+function redraw() { if (currentData) renderChart(); }
+
+function setLoading(on) {
+  document.getElementById('chartLoading').style.display = on ? 'flex' : 'none';
+  if (on) {
+    document.getElementById('mainChart').style.display = 'none';
+    document.getElementById('chartEmpty').style.display = 'none';
+  }
+}
+
+function openFullscreen() {
+  if (!currentData) return;
+  document.getElementById('fsTitle').textContent = currentTitle;
+  document.getElementById('fullscreenOverlay').classList.add('open');
+  if (fsChart) { fsChart.destroy(); fsChart = null; }
+  const scheme  = SCHEMES[currentScheme].colors;
+  const isPie   = ['pie','doughnut','polarArea'].includes(currentType);
+  const styledDs = currentData.datasets.map((ds, i) => {
+    const color = scheme[i % scheme.length];
+    return { ...ds, backgroundColor: isPie?currentData.labels.map((_,li)=>scheme[li%scheme.length]+'cc'):color+'99', borderColor:isPie?scheme:color, borderWidth:2, tension:0.4, pointBackgroundColor:color, barPercentage:0.7 };
+  });
+  fsChart = new Chart(document.getElementById('fsChart'), {
+    type: currentType,
+    data: { labels: currentData.labels, datasets: styledDs },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, position:'bottom', labels:{ font:{size:13}, boxWidth:14, color:'#ccc' } } },
+      scales: isPie?{}:{ y:{ beginAtZero:true, grid:{color:'rgba(255,255,255,.06)'}, ticks:{color:'#aaa',callback:v=>v>=1000000?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+(v/1000).toFixed(0)+'K':v} } },
+      cutout: currentType==='doughnut'?'55%':undefined }
+  });
+}
+
+function closeFullscreen() {
+  document.getElementById('fullscreenOverlay').classList.remove('open');
+  if (fsChart) { fsChart.destroy(); fsChart = null; }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFullscreen(); });
+
+/* ── Init ───────────────────────────────────────────────────────── */
+
+(function init() {
+  const p   = getUrlParams();
+  const tab = p.tab === 'charts' ? 'charts' : 'aging';
+  if (p.account)    $('debtorSearch').value  = p.account;
+  if (p.zone)       $('debtorZone').value    = p.zone;
+  if (p.department) $('creditorDept').value  = p.department;
+  switchTab(tab);
+  if (p.department) agingSwitchTab('creditors');
+  loadDebtors();
+  loadCreditors();
+  buildPresets();
+  buildSchemes();
+})();
+</script>
+</body>
+</html>

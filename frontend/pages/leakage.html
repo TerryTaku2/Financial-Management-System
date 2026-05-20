@@ -2,32 +2,38 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Leakage Monitor — City of Harare FMS</title>
+<title>Leakage & Audit — City of Harare FMS</title>
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/shared.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-/* ── Print styles ──────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:4px;padding:0 0 0 2px;border-bottom:2px solid var(--border);margin-bottom:20px}
+.tab-btn{background:none;border:none;padding:10px 20px;font-size:13.5px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--primary-light);border-bottom-color:var(--primary-light)}
+.tab-btn:hover:not(.active){color:var(--text1)}
+.tab-pane{display:none}.tab-pane.active{display:block}
 @media print {
-  .sidebar, .topbar, .btn, #alertsList .btn, .change-pwd-btn,
-  #toast-container, .modal-overlay { display: none !important; }
-  .app-layout { display: block !important; }
-  .main-content { margin: 0 !important; padding: 0 !important; }
-  .page-content { padding: 0 !important; }
-  body { background: #fff !important; color: #000 !important; font-size: 11pt; }
-  .print-header { display: block !important; }
-  .stat-card { border: 1px solid #ccc !important; background: #f9f9f9 !important; color: #000 !important; }
-  .stat-value { color: #000 !important; }
-  .card { border: 1px solid #ccc !important; background: #fff !important; page-break-inside: avoid; }
-  .card-title { color: #000 !important; }
-  .alert-item { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; page-break-inside: avoid; }
-  .alert-desc, .alert-type { color: #000 !important; }
-  .badge { border: 1px solid #ccc; }
-  canvas { max-width: 300px; }
-  #printMethodNote { display: block !important; }
+  .sidebar,.topbar,.btn,#alertsList .btn,.change-pwd-btn,
+  #toast-container,.modal-overlay,.tab-bar{display:none!important}
+  .app-layout{display:block!important}
+  .main-content{margin:0!important;padding:0!important}
+  .page-content{padding:0!important}
+  body{background:#fff!important;color:#000!important;font-size:11pt}
+  .print-header{display:block!important}
+  .stat-card{border:1px solid #ccc!important;background:#f9f9f9!important;color:#000!important}
+  .stat-value{color:#000!important}
+  .card{border:1px solid #ccc!important;background:#fff!important;page-break-inside:avoid}
+  .card-title{color:#000!important}
+  .alert-item{border:1px solid #ccc!important;background:#fff!important;color:#000!important;page-break-inside:avoid}
+  .alert-desc,.alert-type{color:#000!important}
+  .badge{border:1px solid #ccc}
+  canvas{max-width:300px}
+  #printMethodNote{display:block!important}
+  .tab-pane{display:block!important}
+  #pane-audit{display:none!important}
 }
-.print-header { display: none; padding: 0 0 16px 0; border-bottom: 2px solid #333; margin-bottom: 20px; }
-#printMethodNote { display: none; font-size: 10pt; color: #555; margin-top: 8px; }
+.print-header{display:none;padding:0 0 16px 0;border-bottom:2px solid #333;margin-bottom:20px}
+#printMethodNote{display:none;font-size:10pt;color:#555;margin-top:8px}
 </style>
 </head>
 <body>
@@ -35,109 +41,133 @@
   <aside class="sidebar" id="sidebar"></aside>
   <div class="main-content">
     <div class="topbar">
-      <span class="topbar-title">🔍 Revenue Leakage Monitor</span>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-secondary btn-sm" onclick="runScan()" id="scanBtn">🔎 Scan for Leakage</button>
-        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/leakage?format=csv','leakage_alerts.csv')">⬇ CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/leakage?format=xlsx','leakage_alerts.xlsx')">⬇ Excel</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportLeakagePDF()">⬇ PDF</button>
-        <button class="btn btn-primary btn-sm" onclick="printReport()">🖨️ Print</button>
-      </div>
+      <span class="topbar-title">Leakage &amp; Audit</span>
+      <div class="topbar-right" id="topbarActions"></div>
     </div>
     <div class="page-content">
 
-      <!-- Print-only header (hidden on screen) -->
-      <div class="print-header">
-        <div style="font-size:20pt;font-weight:700">City of Harare — Financial Management System</div>
-        <div style="font-size:14pt;margin-top:4px">Revenue Leakage Monitor Report</div>
-        <div id="printMethodNote">
-          <strong>Detection methodology:</strong> Z-score statistical outlier detection (Grubbs, 1969; Iglewicz &amp; Hoaglin, 1993) applied to invoice amounts by revenue category. Anomaly thresholds: |Z| &gt; 3.0 = high severity, |Z| &gt; 2.0 = medium, |Z| &gt; 1.5 = low. Leakage Risk Index computed as: 40% × unreconciled payments + 25% × overdue balance (ACFE Revenue Assurance Framework, 2022).
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab-btn" id="tab-leakage" onclick="switchTab('leakage')">Leakage Monitor</button>
+        <button class="tab-btn" id="tab-audit"   onclick="switchTab('audit')">Audit Trail</button>
+      </div>
+
+      <!-- ── Leakage tab ──────────────────────────────────────────── -->
+      <div class="tab-pane" id="pane-leakage">
+
+        <!-- Print-only header -->
+        <div class="print-header">
+          <div style="font-size:20pt;font-weight:700">City of Harare — Financial Management System</div>
+          <div style="font-size:14pt;margin-top:4px">Revenue Leakage Monitor Report</div>
+          <div id="printMethodNote">
+            <strong>Detection methodology:</strong> Z-score statistical outlier detection (Grubbs, 1969; Iglewicz &amp; Hoaglin, 1993) applied to invoice amounts by revenue category. Anomaly thresholds: |Z| &gt; 3.0 = high severity, |Z| &gt; 2.0 = medium, |Z| &gt; 1.5 = low. Leakage Risk Index computed as: 40% × unreconciled payments + 25% × overdue balance (ACFE Revenue Assurance Framework, 2022).
+          </div>
+          <div id="printGenDate" style="margin-top:6px;font-size:10pt;color:#666"></div>
         </div>
-        <div id="printGenDate" style="margin-top:6px;font-size:10pt;color:#666"></div>
-      </div>
 
-      <!-- KPIs -->
-      <div class="stats-grid" id="leakageStats">
-        <div class="stat-card red"><div class="stat-icon">🚨</div><div class="stat-value" id="lkHigh">—</div><div class="stat-label">High Anomaly Flags <span style="font-size:10px;opacity:0.7">(invoices + payments)</span></div></div>
-        <div class="stat-card yellow"><div class="stat-icon">⚠️</div><div class="stat-value" id="lkMedium">—</div><div class="stat-label">Medium Anomaly Flags <span style="font-size:10px;opacity:0.7">(invoices + payments)</span></div></div>
-        <div class="stat-card blue"><div class="stat-icon">🔔</div><div class="stat-value" id="lkAlerts">—</div><div class="stat-label">Active Alerts</div></div>
-        <div class="stat-card red"><div class="stat-icon">💸</div><div class="stat-value" id="lkEstimate">—</div><div class="stat-label">Estimated Leakage <span style="font-size:10px;opacity:0.7">(5-component ACFE model)</span></div></div>
-        <div class="stat-card yellow"><div class="stat-icon">🔄</div><div class="stat-value" id="lkUnrecon">—</div><div class="stat-label">Unreconciled Payments</div></div>
-        <div class="stat-card red"><div class="stat-icon">📉</div><div class="stat-value" id="lkOverdue">—</div><div class="stat-label">Overdue Invoice Balance <span style="font-size:10px;opacity:0.7">(overdue status only; total outstanding on Dashboard)</span></div></div>
-      </div>
-
-      <!-- Leakage Explanation Panel -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <span class="card-title">📌 What is Revenue Leakage?</span>
+        <!-- KPIs -->
+        <div class="stats-grid" id="leakageStats">
+          <div class="stat-card red"><div class="stat-icon">🚨</div><div class="stat-value" id="lkHigh">—</div><div class="stat-label">High Anomaly Flags <span style="font-size:10px;opacity:0.7">(invoices + payments)</span></div></div>
+          <div class="stat-card yellow"><div class="stat-icon">⚠️</div><div class="stat-value" id="lkMedium">—</div><div class="stat-label">Medium Anomaly Flags <span style="font-size:10px;opacity:0.7">(invoices + payments)</span></div></div>
+          <div class="stat-card blue"><div class="stat-icon">🔔</div><div class="stat-value" id="lkAlerts">—</div><div class="stat-label">Active Alerts</div></div>
+          <div class="stat-card red"><div class="stat-icon">💸</div><div class="stat-value" id="lkEstimate">—</div><div class="stat-label">Estimated Leakage <span style="font-size:10px;opacity:0.7">(5-component ACFE model)</span></div></div>
+          <div class="stat-card yellow"><div class="stat-icon">🔄</div><div class="stat-value" id="lkUnrecon">—</div><div class="stat-label">Unreconciled Payments</div></div>
+          <div class="stat-card red"><div class="stat-icon">📉</div><div class="stat-value" id="lkOverdue">—</div><div class="stat-label">Overdue Invoice Balance <span style="font-size:10px;opacity:0.7">(overdue status only; total outstanding on Dashboard)</span></div></div>
         </div>
-        <p style="color:var(--text2);font-size:13.5px;line-height:1.8">
-          Revenue leakage in the City of Harare occurs when billable income fails to reach the municipal treasury due to manual collection gaps, unreconciled payments, fraudulent waivers, duplicate billing, and ghost ratepayers. This system detects leakage through <strong style="color:var(--text)">anomaly detection algorithms</strong>, reconciliation tracking, and real-time alert monitoring — enabling officers to act before losses become permanent.
-        </p>
-      </div>
 
-      <div class="grid-2 mb-4">
-        <div class="card">
+        <div class="card mb-4">
+          <div class="card-header"><span class="card-title">📌 What is Revenue Leakage?</span></div>
+          <p style="color:var(--text2);font-size:13.5px;line-height:1.8">
+            Revenue leakage in the City of Harare occurs when billable income fails to reach the municipal treasury due to manual collection gaps, unreconciled payments, fraudulent waivers, duplicate billing, and ghost ratepayers. This system detects leakage through <strong style="color:var(--text)">anomaly detection algorithms</strong>, reconciliation tracking, and real-time alert monitoring — enabling officers to act before losses become permanent.
+          </p>
+        </div>
+
+        <div class="grid-2 mb-4">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Anomaly Distribution</span>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('anomalyChart','anomaly_distribution.png')">⬇ PNG</button>
+                <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('anomalyChart','Anomaly Distribution','anomaly_distribution.pdf')">⬇ PDF</button>
+              </div>
+            </div>
+            <canvas id="anomalyChart" height="200"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Leakage Breakdown</span>
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('leakagePieChart','leakage_breakdown.png')">⬇ PNG</button>
+                <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('leakagePieChart','Leakage Breakdown','leakage_breakdown.pdf')">⬇ PDF</button>
+              </div>
+            </div>
+            <canvas id="leakagePieChart" height="200"></canvas>
+          </div>
+        </div>
+
+        <div class="card mb-4">
           <div class="card-header">
-            <span class="card-title">Anomaly Distribution</span>
+            <span class="card-title">📊 Leakage Quantification by Type</span>
+            <span style="font-size:11px;color:var(--text3)" id="quantMethodNote">ACFE (2022) weighted risk model</span>
+          </div>
+          <div id="quantTypeTable" style="overflow-x:auto"></div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <span class="card-title">📂 Leakage by Revenue Category</span>
+            <span style="font-size:11px;color:var(--text3)">Objective 2 — revenue leakage measurement</span>
+          </div>
+          <div id="quantCategoryTable" style="overflow-x:auto"></div>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">
+            <span class="card-title">📈 Leakage Cause Trend (Monthly)</span>
             <div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('anomalyChart','anomaly_distribution.png')">⬇ PNG</button>
-              <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('anomalyChart','Anomaly Distribution','anomaly_distribution.pdf')">⬇ PDF</button>
+              <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('causeTrendChart','cause_trend.png')">⬇ PNG</button>
+              <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('causeTrendChart','Leakage Cause Trend','cause_trend.pdf')">⬇ PDF</button>
             </div>
           </div>
-          <canvas id="anomalyChart" height="200"></canvas>
+          <canvas id="causeTrendChart" height="180"></canvas>
+          <div id="causeAnalysisInsight" style="margin-top:12px;padding:10px;background:var(--bg3);border-radius:6px;font-size:13px;color:var(--text2)"></div>
         </div>
+
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Leakage Breakdown</span>
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('leakagePieChart','leakage_breakdown.png')">⬇ PNG</button>
-              <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('leakagePieChart','Leakage Breakdown','leakage_breakdown.pdf')">⬇ PDF</button>
+            <span class="card-title">🚨 Active Leakage Alerts</span>
+            <span id="alertCount" style="font-size:12px;color:var(--text2)"></span>
+          </div>
+          <div id="alertsList"></div>
+        </div>
+
+      </div><!-- /pane-leakage -->
+
+      <!-- ── Audit tab ────────────────────────────────────────────── -->
+      <div class="tab-pane" id="pane-audit">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">System Activity Log</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <select id="auditTypeFilter" onchange="loadAudit(1)" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text1)">
+                <option value="">All Events (incl. automated)</option>
+                <option value="user">User Actions Only</option>
+              </select>
+              <span style="font-size:12px;color:var(--text2)">All actions are immutably logged</span>
             </div>
           </div>
-          <canvas id="leakagePieChart" height="200"></canvas>
-        </div>
-      </div>
-
-      <!-- Leakage Quantification by Type -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <span class="card-title">📊 Leakage Quantification by Type</span>
-          <span style="font-size:11px;color:var(--text3)" id="quantMethodNote">ACFE (2022) weighted risk model</span>
-        </div>
-        <div id="quantTypeTable" style="overflow-x:auto"></div>
-      </div>
-
-      <!-- Leakage Quantification by Category -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <span class="card-title">📂 Leakage by Revenue Category</span>
-          <span style="font-size:11px;color:var(--text3)">Objective 2 — revenue leakage measurement</span>
-        </div>
-        <div id="quantCategoryTable" style="overflow-x:auto"></div>
-      </div>
-
-      <!-- Cause Analysis Trend Chart -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <span class="card-title">📈 Leakage Cause Trend (Monthly)</span>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-sm btn-secondary" onclick="downloadChartAsPNG('causeTrendChart','cause_trend.png')">⬇ PNG</button>
-            <button class="btn btn-sm btn-secondary" onclick="exportChartAsPDF('causeTrendChart','Leakage Cause Trend','cause_trend.pdf')">⬇ PDF</button>
+          <div style="font-size:11.5px;color:var(--text3);padding:6px 16px 0">
+            IP address is captured for user-initiated actions only. Automated system events (e.g. overdue marking) run server-side and show "—".
           </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>User</th><th>Action</th><th>Module</th><th>Description</th><th>IP Address</th><th>Timestamp</th></tr></thead>
+              <tbody id="auditTable"><tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="auditPagination"></div>
         </div>
-        <canvas id="causeTrendChart" height="180"></canvas>
-        <div id="causeAnalysisInsight" style="margin-top:12px;padding:10px;background:var(--bg3);border-radius:6px;font-size:13px;color:var(--text2)"></div>
-      </div>
-
-      <!-- Active Alerts Table -->
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">🚨 Active Leakage Alerts</span>
-          <span id="alertCount" style="font-size:12px;color:var(--text2)"></span>
-        </div>
-        <div id="alertsList"></div>
-      </div>
+      </div><!-- /pane-audit -->
 
     </div>
   </div>
@@ -147,7 +177,37 @@
 <script>
 requireAuth(); buildSidebar('leakage');
 
-// ── WebSocket real-time updates ──────────────────────────────────────────────
+/* ── Tab switching ──────────────────────────────────────────────────────── */
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  renderTopbarActions(tab);
+  setUrlParam('tab', tab === 'leakage' ? null : tab);
+}
+
+function renderTopbarActions(tab) {
+  const el = document.getElementById('topbarActions');
+  if (tab === 'leakage') {
+    el.innerHTML = `
+      <button class="btn btn-secondary btn-sm" onclick="runScan()" id="scanBtn">🔎 Scan for Leakage</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/leakage?format=csv','leakage_alerts.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadExport('/api/export/leakage?format=xlsx','leakage_alerts.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportLeakagePDF()">⬇ PDF</button>
+      <button class="btn btn-primary btn-sm" onclick="printReport()">🖨️ Print</button>
+    `;
+  } else {
+    el.innerHTML = `
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=csv','audit_trail.csv')">⬇ CSV</button>
+      <button class="btn btn-secondary" onclick="downloadExport('/api/export/audit-logs?format=xlsx','audit_trail.xlsx')">⬇ Excel</button>
+      <button class="btn btn-secondary" onclick="exportTablePDF('Audit Trail','auditTable','audit_trail.pdf')">⬇ PDF</button>
+    `;
+  }
+}
+
+/* ── WebSocket real-time updates ────────────────────────────────────────── */
 (function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws    = new WebSocket(`${proto}//${location.host}/ws`);
@@ -167,12 +227,11 @@ requireAuth(); buildSidebar('leakage');
   ws.onclose = () => setTimeout(connectWS, 4000);
 })();
 
-// ── Quantification loader ────────────────────────────────────────────────────
+/* ── Leakage functions ───────────────────────────────────────────────────── */
+
 async function loadQuantification() {
   try {
     const q = await apiFetch('/api/leakage/quantification');
-
-    // By-type table
     const typeRows = q.by_type.map(t => `
       <tr>
         <td><strong>${t.type}</strong><div style="font-size:11px;color:var(--text3);max-width:320px">${t.description}</div></td>
@@ -196,8 +255,6 @@ async function loadQuantification() {
           <td style="padding:8px 12px;text-align:center">${q.leakage_rate_pct}% of billed</td>
         </tr></tfoot>
       </table>`;
-
-    // By-category table
     const catRows = q.by_category.map(c => `
       <tr>
         <td style="text-transform:capitalize;font-weight:500">${c.category}</td>
@@ -228,28 +285,23 @@ async function loadQuantification() {
   }
 }
 
-// ── Cause analysis chart loader ──────────────────────────────────────────────
 let _causeChart = null;
 async function loadCauseAnalysis() {
   try {
     const ca = await apiFetch('/api/leakage/cause-analysis?months=6');
-    const labels   = ca.monthly_trend.map(m => m.month);
+    const labels    = ca.monthly_trend.map(m => m.month);
     const unrecData = ca.monthly_trend.map(m => m.unreconciled_leakage);
     const ovdData   = ca.monthly_trend.map(m => m.overdue_leakage);
     const anomData  = ca.monthly_trend.map(m => m.anomaly_leakage);
-
     if (_causeChart) _causeChart.destroy();
     _causeChart = new Chart(document.getElementById('causeTrendChart'), {
       type: 'bar',
       data: {
         labels,
         datasets: [
-          { label: 'Unreconciled Payments', data: unrecData,
-            backgroundColor: 'rgba(231,76,60,0.75)', borderColor: '#e74c3c', borderWidth: 1 },
-          { label: 'Overdue Balances',      data: ovdData,
-            backgroundColor: 'rgba(243,156,18,0.75)', borderColor: '#f39c12', borderWidth: 1 },
-          { label: 'Anomalous Invoices',    data: anomData,
-            backgroundColor: 'rgba(59,125,216,0.75)', borderColor: '#3b7dd8', borderWidth: 1 },
+          { label: 'Unreconciled Payments', data: unrecData, backgroundColor: 'rgba(231,76,60,0.75)',  borderColor: '#e74c3c', borderWidth: 1 },
+          { label: 'Overdue Balances',      data: ovdData,   backgroundColor: 'rgba(243,156,18,0.75)', borderColor: '#f39c12', borderWidth: 1 },
+          { label: 'Anomalous Invoices',    data: anomData,  backgroundColor: 'rgba(59,125,216,0.75)', borderColor: '#3b7dd8', borderWidth: 1 },
         ]
       },
       options: {
@@ -260,9 +312,8 @@ async function loadCauseAnalysis() {
                     ticks: { callback: v => '$' + v.toLocaleString() } } }
       }
     });
-
     const trendIcon = ca.trend_direction === 'worsening' ? '📈 Worsening' :
-                      ca.trend_direction === 'improving' ? '📉 Improving' : '➡ Stable';
+                      ca.trend_direction === 'improving'  ? '📉 Improving' : '➡ Stable';
     const topCause  = ca.top_causes[0] || {};
     document.getElementById('causeAnalysisInsight').innerHTML =
       `<strong>Trend: ${trendIcon}</strong> — slope $${ca.slope_per_month}/month over ${ca.months_analysed} months. ` +
@@ -277,15 +328,13 @@ async function loadLeakage() {
       apiFetch('/api/leakage/summary'),
       apiFetch('/api/leakage/alerts'),
     ]);
-
-    document.getElementById('lkHigh').textContent = summary.high_anomalies;
-    document.getElementById('lkMedium').textContent = summary.medium_anomalies;
-    document.getElementById('lkAlerts').textContent = summary.active_alerts;
+    document.getElementById('lkHigh').textContent     = summary.high_anomalies;
+    document.getElementById('lkMedium').textContent   = summary.medium_anomalies;
+    document.getElementById('lkAlerts').textContent   = summary.active_alerts;
     document.getElementById('lkEstimate').textContent = fmtMoney(summary.estimated_leakage);
-    document.getElementById('lkUnrecon').textContent = summary.unreconciled_payments;
-    document.getElementById('lkOverdue').textContent = fmtMoney(summary.overdue_balance);
+    document.getElementById('lkUnrecon').textContent  = summary.unreconciled_payments;
+    document.getElementById('lkOverdue').textContent  = fmtMoney(summary.overdue_balance);
 
-    // Anomaly bar chart
     new Chart(document.getElementById('anomalyChart'), {
       type: 'bar',
       data: {
@@ -301,17 +350,12 @@ async function loadLeakage() {
       options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
     });
 
-    // Leakage pie chart
     new Chart(document.getElementById('leakagePieChart'), {
       type: 'doughnut',
       data: {
         labels: ['Unreconciled Payments','Overdue Balance','Other Leakage'],
         datasets: [{
-          data: [
-            summary.unreconciled_amount,
-            summary.overdue_balance,
-            summary.estimated_leakage * 0.2
-          ],
+          data: [summary.unreconciled_amount, summary.overdue_balance, summary.estimated_leakage * 0.2],
           backgroundColor: ['rgba(231,76,60,0.7)','rgba(243,156,18,0.7)','rgba(59,125,216,0.7)'],
           borderColor: ['#e74c3c','#f39c12','#3b7dd8'],
           borderWidth: 1,
@@ -320,16 +364,14 @@ async function loadLeakage() {
       options: { responsive:true, plugins:{ legend:{ position:'bottom' } } }
     });
 
-    // Alerts list
-    const active = alerts.filter(a => !a.is_resolved);
-    const resolved = alerts.filter(a => a.is_resolved);
+    const active   = alerts.filter(a => !a.is_resolved);
+    const resolved = alerts.filter(a =>  a.is_resolved);
     document.getElementById('alertCount').textContent = `${active.length} active · ${resolved.length} resolved`;
 
-    if (alerts.length === 0) {
+    if (!alerts.length) {
       document.getElementById('alertsList').innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No alerts — system is clean</p></div>';
       return;
     }
-
     document.getElementById('alertsList').innerHTML = alerts.map(a => `
       <div class="alert-item ${a.is_resolved ? '' : a.severity}" style="${a.is_resolved ? 'opacity:0.5;background:var(--bg3)' : ''}">
         <div class="alert-dot"></div>
@@ -344,7 +386,6 @@ async function loadLeakage() {
         </div>
         ${!a.is_resolved ? `<button class="btn btn-sm btn-secondary" onclick="resolveAlert(${a.id})">Resolve</button>` : ''}
       </div>`).join('');
-
   } catch(e) { toast(e.message, 'error'); }
 }
 
@@ -373,14 +414,12 @@ function printReport() {
   window.print();
 }
 
-loadLeakage();
-loadQuantification();
-loadCauseAnalysis();
-
 async function exportLeakagePDF() {
   try {
-    const data = await apiFetch('/api/leakage/summary');
-    const alerts = await apiFetch('/api/leakage/alerts?limit=500');
+    const [data, alerts] = await Promise.all([
+      apiFetch('/api/leakage/summary'),
+      apiFetch('/api/leakage/alerts?limit=500'),
+    ]);
     const cols = ['Type', 'Severity', 'Description', 'Resolved', 'Created At'];
     const rows = (alerts.items || alerts || []).map(a => [
       a.alert_type, a.severity, a.description,
@@ -390,6 +429,47 @@ async function exportLeakagePDF() {
                     `Total alerts: ${rows.length}`);
   } catch(e) { toast('PDF export failed: ' + e.message, 'error'); }
 }
+
+/* ── Audit functions ─────────────────────────────────────────────────────── */
+
+const actionColors = { LOGIN:'info', CREATE:'paid', UPDATE:'warning', FLAG:'danger', DELETE:'danger' };
+
+async function loadAudit(page = 1) {
+  const skip = (page - 1) * 30;
+  const typeFilter = document.getElementById('auditTypeFilter').value;
+  let url = `/api/audit-logs?skip=${skip}&limit=30`;
+  if (typeFilter === 'user') url += '&user_actions_only=true';
+  try {
+    const data = await apiFetch(url);
+    const tbody = document.getElementById('auditTable');
+    if (!data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>No audit logs</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.items.map((log, i) => `<tr>
+      <td style="color:var(--text3);font-size:12px">${skip + i + 1}</td>
+      <td style="font-weight:500">${log.user}</td>
+      <td><span class="badge badge-${actionColors[log.action] || 'info'}">${log.action}</span></td>
+      <td style="color:var(--text2);font-size:12.5px">${log.table_name}</td>
+      <td style="font-size:12.5px">${log.description}</td>
+      <td style="font-size:12px;color:var(--text3)">${log.ip_address || '—'}</td>
+      <td style="font-size:12px;color:var(--text2)">${log.timestamp}</td>
+    </tr>`).join('');
+    renderPagination('auditPagination', data.total, 30, page, 'loadAudit');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+
+(function init() {
+  const p = getUrlParams();
+  const tab = p.tab === 'audit' ? 'audit' : 'leakage';
+  switchTab(tab);
+  loadLeakage();
+  loadQuantification();
+  loadCauseAnalysis();
+  loadAudit();
+})();
 </script>
 </body>
 </html>
